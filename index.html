@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Club de Tiro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body id="body-app">
+
+    <!-- BARRA SUPERIOR -->
+    <div class="topbar">
+        <h1>CLUB CAZADORES DE TRES ARROYOS</h1>
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div style="text-align: right;">
+                <div id="reloj" class="reloj"></div>
+                <div id="fecha-top" style="font-size: 0.85rem; color: #8B949E; text-transform: uppercase; font-weight: bold; margin-top: 2px;"></div>
+            </div>
+            <button id="btn-admin-top" onclick="abrirModalLogin()">Acceso Admin</button>
+        </div>
+    </div>
+
+    <!-- VISTA INICIO (Pública) -->
+    <div id="vista-inicio" class="container" style="display: block;">
+        <h2>Seleccione un torneo para ver en pantalla:</h2>
+        <div id="grid-torneos-publicos" class="torneos-grid"></div>
+    </div>
+
+    <!-- VISTA PANTALLA TV (Pública) -->
+    <div id="vista-tv" style="display: none;">
+        <div style="padding: 15px 30px; background-color: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="btn-outline" onclick="volverAlInicio()">← Volver</button>
+                <h2 id="nombre-torneo" style="margin: 0; border: none; font-size: 1.5rem; color: var(--accent);"></h2>
+            </div>
+            <label style="color: white; font-weight: bold; font-size: 1rem; cursor: pointer; display: flex; align-items: center; gap: 10px; background: #1C2128; padding: 8px 15px; border-radius: 4px; border: 1px solid var(--border);">
+                📺 MODO TV <input type="checkbox" id="check-modo-tv" onchange="toggleModoTV()" style="width: 18px; height: 18px;">
+            </label>
+        </div>
+
+        <div class="container">
+            <div class="tabs-tv">
+                <button class="tab-btn-tv active" onclick="cambiarModoTV('resultados', this)">Resultados</button>
+                <button class="tab-btn-tv" onclick="cambiarModoTV('pedana', this)">Llamado a Pedana</button>
+                <button class="tab-btn-tv" onclick="cambiarModoTV('dividido', this)">Modo Dividido</button>
+            </div>
+
+            <!-- Panel: Solo Resultados -->
+            <div id="contenedor-modo-resultados" class="modo-tv-pane active">
+                <div class="resultados-header">
+                    <div class="tag-resultados">RESULTADOS</div>
+                    <input type="text" class="search-resultados" placeholder="🔍 Buscar tirador o categoría..." oninput="setFiltroBusqueda(this.value)">
+                    <span style="color: white; font-size: 0.9rem; font-weight: bold;">Ordenado por puntaje</span>
+                </div>
+                <div class="cat-filters">
+                    <button class="btn-cat active" onclick="setFiltroCategoria('Todas'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Todas</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Senior'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Senior</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Veterano'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Veterano</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Super Vet.'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Super Vet.</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Dama'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Dama</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Principiante'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Principiante</button>
+                    <button class="btn-cat" onclick="setFiltroCategoria('Junior'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Junior</button>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead id="cabecera-tabla-tv"></thead>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Panel: Solo Pedana -->
+            <div id="contenedor-modo-pedana" class="modo-tv-pane">
+                <div id="contenedor-pedana-tv"></div>
+            </div>
+
+            <!-- Panel: Modo Dividido -->
+            <div id="contenedor-modo-dividido" class="modo-tv-pane">
+                <div class="split-layout">
+                    <div class="split-left">
+                        <div class="resultados-header" style="border-radius: 8px 8px 0 0;">
+                            <div class="tag-resultados">RESULTADOS</div>
+                        </div>
+                        <div class="table-container bd-container" style="border-radius: 0 0 8px 8px; border-top: none;">
+                            <table>
+                                <thead id="cabecera-tabla-split"></thead>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="split-right">
+                        <div id="contenedor-pedana-split"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALES SISTEMA -->
+    <div id="modal-login" class="modal">
+        <div class="modal-content">
+            <h2 style="color: var(--accent); margin-top: 0;">Acceso Restringido</h2>
+            <input type="email" id="login-email" placeholder="Correo electrónico" style="width: 100%; box-sizing: border-box; margin-bottom: 10px;">
+            <input type="password" id="login-pass" placeholder="Contraseña" style="width: 100%; box-sizing: border-box; margin-bottom: 10px;">
+            <p id="login-error" style="color: var(--danger); font-size: 0.9rem; display: none; font-weight: bold;">Credenciales incorrectas.</p>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="iniciarSesion()" style="flex: 1;">Ingresar</button>
+                <button class="btn-outline" onclick="cerrarModalLogin()" style="flex: 1;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal-alerta" class="modal" style="z-index: 9999;">
+        <div class="modal-content" style="text-align: center;">
+            <h3 style="color: var(--accent); margin-top: 0;">Atención</h3>
+            <p id="alerta-mensaje" style="font-size: 1.1rem; margin-bottom: 25px;"></p>
+            <button onclick="cerrarAlerta()" style="width: 100%;">Entendido</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
