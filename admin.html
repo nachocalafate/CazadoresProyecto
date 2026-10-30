@@ -68,8 +68,13 @@
                 <div class="juez-sidebar" style="overflow-y: hidden; display: flex; flex-direction: column; height: 70vh;">
                     <div style="flex-shrink: 0; padding-bottom: 10px;">
                         <div class="titulo-amarillo" style="display: block; text-align: center; border-radius: 4px;">TIRADORES</div>
-                        <input type="text" id="buscador-jueces" placeholder="Buscar tirador o categoría" onkeyup="renderizarAdminJueces()" style="width: 100%; box-sizing: border-box; margin: 10px 0;">
-                        <div style="font-size: 0.8rem; color: var(--accent); font-weight: bold; text-align: center;">Ordenado por Resultado</div>
+                        <!-- Selector de grupos/escuadras para Plato -->
+                        <div id="contenedor-grupos-jueces" style="display: none; margin-top: 10px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Filtrar Escuadra / Grupo:</label>
+                            <select id="select-grupo-jueces" onchange="cambiarGrupoJueces()" style="width: 100%; box-sizing: border-box; margin-bottom: 5px;"></select>
+                        </div>
+                        <input type="text" id="buscador-jueces" placeholder="Buscar tirador..." onkeyup="renderizarAdminJueces()" style="width: 100%; box-sizing: border-box; margin: 10px 0;">
+                        <div style="font-size: 0.8rem; color: var(--accent); font-weight: bold; text-align: center;">Ordenado por Nº de Tirador</div>
                     </div>
                     <div id="juez-lista-tiradores" style="overflow-y: auto; flex-grow: 1; padding-right: 10px; margin-right: -10px;"></div>
                 </div>
@@ -132,17 +137,27 @@
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="edit-nombre-torneo" style="flex: 1; margin: 0; box-sizing: border-box;" placeholder="Nombre del torneo">
                         <input type="date" id="edit-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
-                        <select id="edit-platos-torneo" style="width: 150px; margin: 0;">
-                            <option value="6">6 Platos</option><option value="9">9 Platos</option><option value="12">12 Platos</option><option value="18">18 Platos</option><option value="24">24 Platos</option>
+                        
+                        <select id="edit-disciplina" onchange="cambiarDisciplinaUi('edit')" style="width: 120px; margin: 0;">
+                            <option value="Helice">Hélice</option>
+                            <option value="Plato">Plato</option>
                         </select>
+                        
+                        <select id="edit-platos" onchange="cambiarPlatosPersonalizado('edit')" style="width: 130px; margin: 0;"></select>
+                        <input type="number" id="edit-platos-custom" placeholder="Cant." style="width: 80px; margin: 0; display: none;">
+                        
+                        <div id="edit-grupo-container" style="display: none; align-items: center; gap: 5px;">
+                            <label style="color: white; font-size: 0.85rem;">Tiradores por Escuadra:</label>
+                            <input type="number" id="edit-grupo-size" style="width: 60px; margin: 0;" value="1">
+                        </div>
+
                         <button onclick="editarTorneoActual()" style="background-color: #2EA043; color: white; padding: 12px 20px;">Guardar Cambios</button>
                         <button onclick="eliminarTorneoActual()" style="background-color: #F85149; color: white; padding: 12px 20px;">Eliminar Torneo</button>
                     </div>
 
-                    <!-- BOTÓN PARA CAMBIAR ESTADO A EN CURSO -->
                     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
                         <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 1rem; color: white;">Estado de Transmisión</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Al marcarlo "En Curso", aparecerá un cartel rojo titilando en la pantalla principal de los usuarios para avisar que está en vivo.</p>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Al marcarlo "En Curso", aparecerá un cartel rojo titilando en la pantalla principal de los usuarios.</p>
                         <button id="btn-estado-torneo" onclick="toggleEstadoTorneoActual()" style="padding: 10px 25px; font-weight: bold;">Cargando estado...</button>
                     </div>
                 </div>
@@ -150,11 +165,22 @@
                 <div class="admin-panel" style="margin-bottom: 0;">
                     <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Crear Nuevo Torneo</h3>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                        <input type="text" id="input-nuevo-torneo" placeholder="Ej: Torneo Social Hélice" style="flex: 1; margin: 0; box-sizing: border-box;">
+                        <input type="text" id="input-nuevo-torneo" placeholder="Ej: Torneo Social" style="flex: 1; margin: 0; box-sizing: border-box;">
                         <input type="date" id="input-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
-                        <select id="input-platos" style="width: 150px; margin: 0;">
-                            <option value="6">6 Platos</option><option value="9">9 Platos</option><option value="12" selected>12 Platos</option><option value="18">18 Platos</option><option value="24">24 Platos</option>
+                        
+                        <select id="input-disciplina" onchange="cambiarDisciplinaUi('input')" style="width: 120px; margin: 0;">
+                            <option value="Helice" selected>Hélice</option>
+                            <option value="Plato">Plato</option>
                         </select>
+                        
+                        <select id="input-platos" onchange="cambiarPlatosPersonalizado('input')" style="width: 130px; margin: 0;"></select>
+                        <input type="number" id="input-platos-custom" placeholder="Cant." style="width: 80px; margin: 0; display: none;">
+                        
+                        <div id="input-grupo-container" style="display: none; align-items: center; gap: 5px;">
+                            <label style="color: white; font-size: 0.85rem;">Tiradores por Escuadra:</label>
+                            <input type="number" id="input-grupo-size" style="width: 60px; margin: 0;" value="5">
+                        </div>
+
                         <button onclick="crearTorneo()" style="background-color: var(--accent); color: black; padding: 12px 30px;">Crear Torneo</button>
                     </div>
                 </div>
@@ -168,5 +194,13 @@
     <div id="modal-confirm" class="modal"><div class="modal-content" style="text-align: center; max-width: 400px;"><h3 id="confirm-mensaje" style="margin-top: 0; color: white; font-size: 1.1rem; line-height: 1.4;">¿Estás seguro?</h3><div style="display: flex; gap: 10px; margin-top: 25px;"><button id="btn-confirm-ok" style="flex: 1; background-color: var(--danger); color: white;">Confirmar</button><button class="btn-outline" onclick="cerrarConfirmacion()" style="flex: 1;">Cancelar</button></div></div></div>
 
     <script src="app.js"></script>
+    <script>
+        // Inicializar los menús desplegables apenas carga el panel
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof cambiarDisciplinaUi === 'function') {
+                cambiarDisciplinaUi('input');
+            }
+        });
+    </script>
 </body>
 </html>
