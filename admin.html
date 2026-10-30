@@ -38,15 +38,8 @@
                 <div class="tag-resultados">RESULTADOS</div>
                 <input type="text" class="search-resultados" placeholder="🔍 Buscar tirador o categoría..." onkeyup="setFiltroBusqueda(this.value)">
             </div>
-            <div class="cat-filters" id="filtros-cat-admin">
-                <button class="btn-cat active" onclick="setFiltroCategoria('Todas')">Todas</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Senior')">Senior</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Veterano')">Veterano</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Super Vet.')">Super Vet.</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Dama')">Dama</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Principiante')">Principiante</button>
-                <button class="btn-cat" onclick="setFiltroCategoria('Junior')">Junior</button>
-            </div>
+            <div class="cat-filters" id="filtros-cat-admin"></div>
+            
             <div class="table-container">
                 <table id="tabla-resultados-admin" style="width: 100%;">
                     <thead id="cabecera-tabla-admin"></thead>
@@ -72,11 +65,13 @@
         <!-- PESTAÑA: JUECES -->
         <div id="tab-jueces" class="tab-pane">
             <div class="juez-layout">
-                <div class="juez-sidebar">
-                    <div class="titulo-amarillo" style="display: block; text-align: center; border-radius: 4px;">TIRADORES</div>
-                    <input type="text" id="buscador-jueces" placeholder="Buscar tirador o categoría" onkeyup="renderizarAdminJueces()" style="width: 100%; box-sizing: border-box; margin: 10px 0;">
-                    <div style="font-size: 0.8rem; color: var(--accent); margin-bottom: 10px; font-weight: bold; text-align: center;">Ordenado por Resultado</div>
-                    <div id="juez-lista-tiradores"></div>
+                <div class="juez-sidebar" style="overflow-y: hidden; display: flex; flex-direction: column; height: 70vh;">
+                    <div style="flex-shrink: 0; padding-bottom: 10px;">
+                        <div class="titulo-amarillo" style="display: block; text-align: center; border-radius: 4px;">TIRADORES</div>
+                        <input type="text" id="buscador-jueces" placeholder="Buscar tirador o categoría" onkeyup="renderizarAdminJueces()" style="width: 100%; box-sizing: border-box; margin: 10px 0;">
+                        <div style="font-size: 0.8rem; color: var(--accent); font-weight: bold; text-align: center;">Ordenado por Resultado</div>
+                    </div>
+                    <div id="juez-lista-tiradores" style="overflow-y: auto; flex-grow: 1; padding-right: 10px; margin-right: -10px;"></div>
                 </div>
                 <div class="juez-main" id="juez-panel-activo">
                     <h2 style="margin-top: 0; color: var(--text-muted); text-align: center;">Seleccione un tirador de la lista</h2>
@@ -102,29 +97,32 @@
                 <div style="display: flex; gap: 10px; width: 100%;">
                     <input type="number" id="input-orden" placeholder="Nº" style="width: 70px;">
                     <input type="text" id="input-tirador" placeholder="Apellido, Nombre" style="flex: 1;">
-                    <select id="input-categoria">
-                        <option value="Senior">Senior</option><option value="Veterano">Veterano</option>
-                        <option value="Super Vet.">Super Vet.</option><option value="Dama">Dama</option>
-                        <option value="Junior">Junior</option><option value="Principiante">Principiante</option>
-                    </select>
+                    <select id="input-categoria"></select>
                     <button onclick="agregarTirador()">Agregar</button>
                 </div>
             </div>
 
             <div class="admin-panel" style="margin-top: 20px;">
                 <h3 style="background-color: var(--accent); color: black; display: inline-block; padding: 5px 15px; border-radius: 4px;">COSTOS DE INSCRIPCIÓN</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Los montos son por torneo. Al crear un torneo nuevo se copian los del anterior.</p>
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;">
-                    <div><label>Inscripción Senior</label><input type="number" id="costo-Senior" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Inscripción Veterano</label><input type="number" id="costo-Veterano" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Inscripción Super Vet.</label><input type="number" id="costo-Super Vet." style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Inscripción Dama</label><input type="number" id="costo-Dama" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Inscripción Junior</label><input type="number" id="costo-Junior" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Inscripción Principiante</label><input type="number" id="costo-Principiante" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>Valor del objetivo ($)</label><input type="number" id="costo-Objetivo" style="width:100%; box-sizing:border-box;"></div>
-                    <div><label>% retención del club</label><input type="number" id="costo-Retencion" style="width:100%; box-sizing:border-box;"></div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Los montos son por torneo. Podés modificar los valores o eliminar categorías con la X roja.</p>
+                
+                <!-- CAJA SEPARADA PARA OBJETIVO Y RETENCIÓN -->
+                <div style="background-color: #0A0A0A; border: 1px solid var(--border); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 15px; margin-bottom: 25px;">
+                    <h4 style="margin-top: 0; color: white; margin-bottom: 15px; font-size: 0.95rem;">⚙️ CONFIGURACIÓN GENERAL</h4>
+                    <div id="contenedor-sistema-costos" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
                 </div>
-                <button onclick="guardarCostos()" style="background-color: var(--success);">Guardar Costos</button>
+                
+                <h4 style="margin-top: 0; color: white; margin-bottom: 10px; font-size: 0.95rem;">🎯 VALORES POR CATEGORÍA</h4>
+                <div id="contenedor-inputs-costos" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;"></div>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; border-top: 1px solid var(--border); padding-top: 15px;">
+                    <input type="text" id="input-nueva-cat" placeholder="Nombre nueva categoría..." style="width: 250px; box-sizing: border-box;">
+                    <button class="btn-outline" onclick="agregarCategoriaConfig()">+ Agregar Categoría</button>
+                </div>
+                
+                <div>
+                    <button onclick="guardarCostos()" style="background-color: var(--success); display: inline-block; padding: 10px 30px;">Guardar Costos</button>
+                </div>
             </div>
         </div>
 
@@ -166,9 +164,7 @@
             <label>Nº Orden</label><input type="number" id="edit-orden" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;">
             <label>Apellido y Nombre</label><input type="text" id="edit-tirador" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;">
             <label>Categoría</label>
-            <select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;">
-                <option value="Senior">Senior</option><option value="Veterano">Veterano</option><option value="Super Vet.">Super Vet.</option><option value="Dama">Dama</option><option value="Junior">Junior</option><option value="Principiante">Principiante</option>
-            </select>
+            <select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select>
             <div style="display: flex; gap: 10px;">
                 <button onclick="guardarEdicionTirador()" style="flex: 1; background-color: var(--success);">Guardar</button>
                 <button class="btn-outline" onclick="cerrarModalEditar()" style="flex: 1;">Cancelar</button>

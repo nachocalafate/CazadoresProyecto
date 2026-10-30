@@ -53,15 +53,9 @@
                     <input type="text" class="search-resultados" placeholder="🔍 Buscar tirador o categoría..." oninput="setFiltroBusqueda(this.value)">
                     <span style="color: white; font-size: 0.9rem; font-weight: bold;">Ordenado por puntaje</span>
                 </div>
-                <div class="cat-filters">
-                    <button class="btn-cat active" onclick="setFiltroCategoria('Todas'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Todas</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Senior'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Senior</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Veterano'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Veterano</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Super Vet.'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Super Vet.</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Dama'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Dama</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Principiante'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Principiante</button>
-                    <button class="btn-cat" onclick="setFiltroCategoria('Junior'); document.querySelectorAll('.btn-cat').forEach(b=>b.classList.remove('active')); this.classList.add('active');">Junior</button>
-                </div>
+                <!-- AQUÍ SE INYECTAN LOS FILTROS DINÁMICOS -->
+                <div class="cat-filters" id="filtros-cat-tv"></div>
+                
                 <div class="table-container">
                     <table>
                         <thead id="cabecera-tabla-tv"></thead>

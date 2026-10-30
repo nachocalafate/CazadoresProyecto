@@ -170,7 +170,6 @@ let frameScrollTV = null;
 function iniciarScrollAutoTV() {
     detenerScrollAutoTV();
     
-    // Pausa inicial de 3 segundos
     document.querySelectorAll('.tbody-resto').forEach(c => {
         c.dataset.pausa = "true";
         c.dataset.scrollReal = 0;
@@ -244,6 +243,7 @@ window.seleccionarTorneoAdmin = async function(id) {
     document.getElementById('edit-platos-torneo').value = torneoAdmin.platos_por_serie;
 
     cargarFormularioCostos();
+    renderizarSelectsCategorias();
     renderizarBotonesTorneosAdmin();
     await cargarResultados(torneoAdmin.id);
 }
@@ -271,10 +271,12 @@ async function cargarResultados(idTorneo) {
 
     const objTorneo = esAdmin ? torneoAdmin : torneoTV;
     if (esAdmin) {
+        renderizarFiltrosCategorias('filtros-cat-admin', objTorneo);
         renderizarAdminJueces(); renderizarAdminBaseDatos(); renderizarStats();
         renderizarVistaResultadosUnificada('cabecera-tabla-admin', objTorneo);
         renderizarPedana('contenedor-pedana-admin', objTorneo);
     } else if (torneoTV) {
+        renderizarFiltrosCategorias('filtros-cat-tv', objTorneo);
         renderizarVistaResultadosUnificada('cabecera-tabla-tv', objTorneo);
         renderizarPedana('contenedor-pedana-tv', objTorneo);
         if (modoVistaTV === 'dividido') {
@@ -285,10 +287,55 @@ async function cargarResultados(idTorneo) {
 }
 
 // ==========================================
+// CATEGORÍAS Y FILTROS DINÁMICOS
+// ==========================================
+function obtenerCategorias(torneoConfig) {
+    if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"];
+    return Object.keys(torneoConfig.costos).filter(k => k !== "Objetivo" && k !== "Retencion");
+}
+
+function renderizarFiltrosCategorias(containerId, torneoConfig) {
+    const cont = document.getElementById(containerId);
+    if (!cont || !torneoConfig) return;
+    const cats = obtenerCategorias(torneoConfig);
+    let html = `<button class="btn-cat ${filtroCategoria === 'Todas' ? 'active' : ''}" onclick="setFiltroCategoria('Todas')">Todas</button>`;
+    cats.forEach(c => {
+        html += `<button class="btn-cat ${filtroCategoria === c ? 'active' : ''}" onclick="setFiltroCategoria('${c}')">${c}</button>`;
+    });
+    cont.innerHTML = html;
+}
+
+function renderizarSelectsCategorias() {
+    if (!torneoAdmin) return;
+    const cats = obtenerCategorias(torneoAdmin);
+    let html = '';
+    cats.forEach(c => html += `<option value="${c}">${c}</option>`);
+    const selectAdd = document.getElementById('input-categoria');
+    const selectEdit = document.getElementById('edit-categoria');
+    if (selectAdd) selectAdd.innerHTML = html;
+    if (selectEdit) selectEdit.innerHTML = html;
+}
+
+// ==========================================
 // VISTA RESULTADOS UNIFICADA (DISEÑO EMPRESARIAL)
 // ==========================================
-window.setFiltroCategoria = function(cat) { filtroCategoria = cat; if(esAdmin)cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
-window.setFiltroBusqueda = function(txt) { filtroBusqueda = txt.toLowerCase(); if(esAdmin)cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
+window.setFiltroCategoria = function(cat) { 
+    filtroCategoria = cat; 
+    const objTorneo = esAdmin ? torneoAdmin : torneoTV;
+    if (esAdmin) {
+        renderizarFiltrosCategorias('filtros-cat-admin', objTorneo);
+        cargarResultados(torneoAdmin.id); 
+    } else {
+        renderizarFiltrosCategorias('filtros-cat-tv', objTorneo);
+        cargarResultados(torneoTV.id); 
+    }
+}
+
+window.setFiltroBusqueda = function(txt) { 
+    filtroBusqueda = txt.toLowerCase(); 
+    if(esAdmin) cargarResultados(torneoAdmin.id); 
+    else cargarResultados(torneoTV.id); 
+}
 
 function formatearNombre(nombre) {
     const maxChars = 14; 
@@ -342,7 +389,8 @@ function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
             }
             let barrageTxt = row.barrage > 0 ? `<span style="color:var(--accent-yellow); font-weight:900;">${row.barrage}</span>` : '-';
             let badgeSerie = row.totalAciertos === torneoConfig.platos_por_serie && torneoConfig.platos_por_serie > 0 ? `<span class="badge-serie">EN SERIE</span>` : '';
-            let catClass = row.categoria.includes('Vet') ? 'supervet' : (row.categoria === 'Junior' ? 'junior' : (row.categoria === 'Principiante' ? 'principiante' : ''));
+            
+            let catClass = row.categoria.toLowerCase().includes('vet') ? 'supervet' : (row.categoria.toLowerCase().includes('junior') ? 'junior' : (row.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
             let nombreCortado = formatearNombre(row.tirador);
             
             html += `
@@ -368,14 +416,12 @@ function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
 
         htmlCompleto += `<tbody class="tbody-enserie">`;
         if(enSerie.length > 0) {
-            /* Acá envolvemos el texto en el div .separador-box para que no ocupe todo el ancho */
             htmlCompleto += `<tr class="tr-separador"><td colspan="100%"><div class="separador-box">EN SERIE</div></td></tr>`;
             htmlCompleto += buildFilas(enSerie);
         }
         htmlCompleto += `</tbody>`;
         
         if(resto.length > 0) {
-            /* Lo mismo acá para "Resto de los tiradores" */
             htmlCompleto += `<tbody class="tbody-resto-header"><tr class="tr-separador"><td colspan="100%"><div class="separador-box">RESTO DE LOS TIRADORES</div></td></tr></tbody>`;
             htmlCompleto += `<tbody class="tbody-resto">`;
             htmlCompleto += buildFilas(resto);
@@ -421,7 +467,7 @@ function renderizarPedana(containerId, torneoConfig) {
     for(let i=1; i<=3; i++) {
         let sig = lista[idx + i];
         if (sig) {
-            let catClass = sig.categoria.includes('Vet') ? 'supervet' : (sig.categoria === 'Junior' ? 'junior' : (sig.categoria === 'Principiante' ? 'principiante' : ''));
+            let catClass = sig.categoria.toLowerCase().includes('vet') ? 'supervet' : (sig.categoria.toLowerCase().includes('junior') ? 'junior' : (sig.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
             htmlNext += `
                 <div class="pedana-next-box">
                     <div class="pedana-next-orden">${sig.orden}</div>
@@ -434,7 +480,7 @@ function renderizarPedana(containerId, torneoConfig) {
     }
     htmlNext += '</div></div>';
 
-    let catClassAct = actual.categoria.includes('Vet') ? 'supervet' : (actual.categoria === 'Junior' ? 'junior' : (actual.categoria === 'Principiante' ? 'principiante' : ''));
+    let catClassAct = actual.categoria.toLowerCase().includes('vet') ? 'supervet' : (actual.categoria.toLowerCase().includes('junior') ? 'junior' : (actual.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
 
     cont.innerHTML = `
         <div class="pedana-container">
@@ -468,7 +514,6 @@ window.cambiarPedana = async function(delta) {
 // ==========================================
 // ESTADÍSTICAS Y GESTIÓN
 // ==========================================
-const CATEGORIAS = ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"];
 
 function claveRanking(t) { return [t.puntajeFinal, t.barrage || 0, t.totalAciertos]; }
 function mismoRanking(a, b) { const x = claveRanking(a), y = claveRanking(b); return x[0] === y[0] && x[1] === y[1] && x[2] === y[2]; }
@@ -489,7 +534,9 @@ function ganadoresDeCategoria(cat) {
 
 function htmlGanadoresPorCategoria() {
     let html = '<div class="winners-grid">';
-    CATEGORIAS.forEach(cat => {
+    const categoriasActuales = obtenerCategorias(torneoAdmin);
+    
+    categoriasActuales.forEach(cat => {
         const g = ganadoresDeCategoria(cat);
         if (!g) { 
             html += `<div class="winner-box vacio"><h4>${cat.toUpperCase()}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Sin tiradores</div></div>`; 
@@ -526,15 +573,21 @@ function renderizarStats() {
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
     const valorObj = costos["Objetivo"] || 1000;
     const retencionPct = costos["Retencion"] || 10;
+    const catsList = obtenerCategorias(torneoAdmin);
 
     let totTiradores = tiradoresLocales.length;
     let totObjetivos = totTiradores * torneoAdmin.platos_por_serie;
     let tirados = 0, pegados = 0, errados = 0;
-    let cats = { "Senior":0, "Veterano":0, "Super Vet.":0, "Dama":0, "Principiante":0, "Junior":0 };
+    
+    let catsCount = {};
+    catsList.forEach(c => catsCount[c] = 0);
+    
     let recaudado = 0;
 
     tiradoresLocales.forEach(t => {
-        cats[t.categoria] = (cats[t.categoria] || 0) + 1;
+        if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++;
+        else catsCount[t.categoria] = 1;
+        
         recaudado += (costos[t.categoria] || 0);
         t.resultados.forEach(r => { if(r !== null) { tirados++; if(r===1) pegados++; else errados++; } });
     });
@@ -543,6 +596,11 @@ function renderizarStats() {
     let porcentajeRet = (recaudado * retencionPct) / 100;
     let premios = recaudado - objRetencion - porcentajeRet; if(premios<0) premios=0;
     let quedaClub = recaudado - premios;
+
+    let htmlCatsGrid = '';
+    catsList.forEach(c => {
+        htmlCatsGrid += `<div class="stat-box"><h4>${c.toUpperCase()}</h4><div class="val">${catsCount[c] || 0}</div></div>`;
+    });
 
     let html = `
         <h2 class="titulo-amarillo">OBJETIVOS</h2>
@@ -554,13 +612,8 @@ function renderizarStats() {
         </div>
         
         <h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2>
-        <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr);">
-            <div class="stat-box"><h4>SENIOR</h4><div class="val">${cats["Senior"]}</div></div>
-            <div class="stat-box"><h4>VETERANO</h4><div class="val">${cats["Veterano"]}</div></div>
-            <div class="stat-box"><h4>SUPER VET.</h4><div class="val">${cats["Super Vet."]}</div></div>
-            <div class="stat-box"><h4>DAMA</h4><div class="val">${cats["Dama"]}</div></div>
-            <div class="stat-box"><h4>PRINCIPIANTE</h4><div class="val">${cats["Principiante"]}</div></div>
-            <div class="stat-box"><h4>JUNIOR</h4><div class="val">${cats["Junior"]}</div></div>
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">
+            ${htmlCatsGrid}
         </div>
 
         <h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>
@@ -579,30 +632,85 @@ function renderizarStats() {
 function cargarFormularioCostos() {
     if (!torneoAdmin) return;
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
-    document.getElementById('costo-Senior').value = costos["Senior"] || 0;
-    document.getElementById('costo-Veterano').value = costos["Veterano"] || 0;
-    document.getElementById('costo-Super Vet.').value = costos["Super Vet."] || 0;
-    document.getElementById('costo-Dama').value = costos["Dama"] || 0;
-    document.getElementById('costo-Junior').value = costos["Junior"] || 0;
-    document.getElementById('costo-Principiante').value = costos["Principiante"] || 0;
-    document.getElementById('costo-Objetivo').value = costos["Objetivo"] || 1000;
-    document.getElementById('costo-Retencion').value = costos["Retencion"] || 10;
+    
+    const contCat = document.getElementById('contenedor-inputs-costos');
+    const contSis = document.getElementById('contenedor-sistema-costos');
+    if(!contCat || !contSis) return;
+    
+    contCat.innerHTML = '';
+    contSis.innerHTML = '';
+    
+    for (let key in costos) {
+        let isSystem = (key === "Objetivo" || key === "Retencion");
+        let label = key === "Objetivo" ? "Valor del objetivo ($)" : (key === "Retencion" ? "% retención del club" : `Inscripción ${key}`);
+        
+        if (isSystem) {
+            contSis.innerHTML += `
+                <div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold; display:block; margin-bottom:8px;">${label}</label>
+                    <input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="width:100%; box-sizing:border-box; background-color: #000;">
+                </div>
+            `;
+        } else {
+            contCat.innerHTML += `
+                <div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${label}</label>
+                        <button class="btn-outline-danger" style="padding: 2px 6px; font-size: 0.7rem; line-height: 1;" onclick="eliminarCategoriaConfig('${key}')" title="Eliminar categoría">X</button>
+                    </div>
+                    <input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="width:100%; box-sizing:border-box; background-color: #000;">
+                </div>
+            `;
+        }
+    }
 }
+
+window.agregarCategoriaConfig = function() {
+    if (!torneoAdmin) return;
+    const nuevaCat = document.getElementById('input-nueva-cat').value.trim();
+    if (!nuevaCat) return mostrarAlerta("Ingrese el nombre de la nueva categoría.");
+    if (!torneoAdmin.costos) torneoAdmin.costos = {};
+    if (torneoAdmin.costos[nuevaCat] !== undefined) return mostrarAlerta("Esa categoría ya existe.");
+    
+    torneoAdmin.costos[nuevaCat] = 0; 
+    document.getElementById('input-nueva-cat').value = '';
+    
+    cargarFormularioCostos();
+    renderizarSelectsCategorias();
+    mostrarAlerta(`Categoría "${nuevaCat}" agregada. No olvides presionar 'Guardar Costos'.`);
+}
+
+window.eliminarCategoriaConfig = function(catKey) {
+    mostrarConfirmacion(`¿Estás seguro de eliminar la categoría "${catKey}" del torneo actual?`, async () => {
+        delete torneoAdmin.costos[catKey];
+        await clienteSupabase.from('torneos').update({ costos: torneoAdmin.costos }).eq('id', torneoAdmin.id);
+        
+        cargarFormularioCostos();
+        renderizarSelectsCategorias();
+        renderizarAdminBaseDatos(); 
+        renderizarStats(); 
+        renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin);
+        mostrarAlerta(`La categoría "${catKey}" fue eliminada correctamente.`);
+    });
+}
+
 window.guardarCostos = async function() {
     if (!torneoAdmin) return;
-    const nuevosCostos = {
-        "Senior": parseInt(document.getElementById('costo-Senior').value) || 0,
-        "Veterano": parseInt(document.getElementById('costo-Veterano').value) || 0,
-        "Super Vet.": parseInt(document.getElementById('costo-Super Vet.').value) || 0,
-        "Dama": parseInt(document.getElementById('costo-Dama').value) || 0,
-        "Junior": parseInt(document.getElementById('costo-Junior').value) || 0,
-        "Principiante": parseInt(document.getElementById('costo-Principiante').value) || 0,
-        "Objetivo": parseInt(document.getElementById('costo-Objetivo').value) || 1000,
-        "Retencion": parseInt(document.getElementById('costo-Retencion').value) || 10
-    };
+    const inputs = document.querySelectorAll('.input-costo-guardar');
+    let nuevosCostos = {};
+    
+    inputs.forEach(inp => {
+        let k = inp.getAttribute('data-key');
+        nuevosCostos[k] = parseInt(inp.value) || 0;
+    });
+    
     await clienteSupabase.from('torneos').update({ costos: nuevosCostos }).eq('id', torneoAdmin.id);
     torneoAdmin.costos = nuevosCostos;
-    renderizarAdminBaseDatos(); renderizarStats(); mostrarAlerta("Costos actualizados con éxito.");
+    renderizarAdminBaseDatos(); 
+    renderizarStats(); 
+    renderizarSelectsCategorias();
+    renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin);
+    mostrarAlerta("Costos actualizados con éxito.");
 }
 
 window.renderizarAdminJueces = function() {
@@ -678,7 +786,7 @@ function renderizarAdminBaseDatos() {
     tbody.innerHTML = '';
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000 };
     [...tiradoresLocales].sort((a, b) => a.orden - b.orden).forEach(row => {
-        let catClass = row.categoria.includes('Vet') ? 'supervet' : (row.categoria === 'Junior' ? 'junior' : (row.categoria === 'Principiante' ? 'principiante' : ''));
+        let catClass = row.categoria.toLowerCase().includes('vet') ? 'supervet' : (row.categoria.toLowerCase().includes('junior') ? 'junior' : (row.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
         tbody.innerHTML += `<tr><td><strong>${row.orden}</strong></td><td style="font-weight: bold; text-transform: uppercase;">${row.tirador}</td><td><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td><td><span class="tag-paralelo">P1</span> <span class="tag-paralelo">P2</span></td><td style="color: white; font-weight: bold;">$ ${(costos[row.categoria] || 0).toLocaleString('es-AR')}</td><td><button class="btn-outline" onclick="abrirModalEditar('${row.id}', '${row.tirador}', ${row.orden}, '${row.categoria}')">Editar</button> <button class="btn-outline-danger" onclick="eliminarTirador('${row.id}')">Eliminar</button></td></tr>`;
     });
 }
@@ -705,7 +813,13 @@ window.togglePlato = async function(idRow, idx, html) {
     await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
 }
 
-window.abrirModalEditar = function(id, nom, ord, cat) { document.getElementById('edit-id').value = id; document.getElementById('edit-tirador').value = nom; document.getElementById('edit-orden').value = ord; document.getElementById('edit-categoria').value = cat; document.getElementById('modal-editar').style.display = 'flex'; }
+window.abrirModalEditar = function(id, nom, ord, cat) { 
+    document.getElementById('edit-id').value = id; 
+    document.getElementById('edit-tirador').value = nom; 
+    document.getElementById('edit-orden').value = ord; 
+    document.getElementById('edit-categoria').value = cat; 
+    document.getElementById('modal-editar').style.display = 'flex'; 
+}
 window.cerrarModalEditar = () => document.getElementById('modal-editar').style.display = 'none';
 
 window.guardarEdicionTirador = async function() {
@@ -745,7 +859,14 @@ window.crearTorneo = async function() {
     
     if (!n || !f) return mostrarAlerta("El nombre y la fecha del torneo son OBLIGATORIOS.");
     
-    const c = { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
+    let c = { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
+    if (listaTorneos && listaTorneos.length > 0) {
+        let ultimoTorneo = listaTorneos[listaTorneos.length - 1];
+        if (ultimoTorneo.costos) {
+            c = JSON.parse(JSON.stringify(ultimoTorneo.costos));
+        }
+    }
+
     await clienteSupabase.from('torneos').insert([{ nombre: n, fecha: f, platos_por_serie: parseInt(p), estado: 'Activo', costos: c, tirador_actual_index: 0 }]);
     
     document.getElementById('input-nuevo-torneo').value = '';
