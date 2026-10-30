@@ -230,3 +230,36 @@ body.modo-tv-activo .pedana-orden { font-size: 11rem; }
 body.modo-tv-activo .pedana-nombre { font-size: 4.5rem; }
 body.modo-tv-activo .pedana-stats .numero-grande { font-size: 5.5rem; }
 body.modo-tv-activo .pedana-stats .texto-chico { font-size: 1.5rem; }
+
+/* Buscador público */
+.buscador-publico {
+    width: 100%;
+    max-width: 350px;
+    padding: 10px 15px;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background-color: #111;
+    color: white;
+    font-size: 1rem;
+}
+
+/* Cartel EN CURSO */
+.badge-en-curso {
+    background-color: #E60000;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 900;
+    font-size: 0.75rem;
+    margin-left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+    animation: titilarLive 1.5s infinite;
+    box-shadow: 0 0 8px rgba(230, 0, 0, 0.6);
+}
+
+@keyframes titilarLive {
+    0% { opacity: 1; }
+    50% { opacity: 0.4; }
+    100% { opacity: 1; }
+}

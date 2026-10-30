@@ -21,12 +21,22 @@
         </div>
     </div>
 
-    <!-- VISTA INICIO (Pública) -->
-    <div id="vista-inicio" class="container" style="display: block;">
-        <h2>Seleccione un torneo para ver en pantalla:</h2>
+    <!-- VISTA INICIO: SELECCIÓN DE TORNEOS -->
+    <div id="vista-inicio" class="container" style="max-width: 900px; padding-top: 50px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
+            <h1 style="color: white; margin: 0; font-size: 2rem;">TORNEOS DISPONIBLES</h1>
+            
+            <!-- NUEVO BUSCADOR PÚBLICO -->
+            <input type="text" id="buscador-torneos-publico" class="buscador-publico" placeholder="🔍 Buscar por nombre (ej: fosa)..." onkeyup="renderizarTarjetasInicio()">
+        </div>
+        
         <div id="grid-torneos-publicos" class="torneos-grid"></div>
+        
+        <div style="text-align: center; margin-top: 50px;">
+            <button class="btn-outline" onclick="abrirModalLogin()">Acceso Administrador</button>
+        </div>
     </div>
-
+    
     <!-- VISTA PANTALLA TV (Pública) -->
     <div id="vista-tv" style="display: none;">
         <div style="padding: 15px 30px; background-color: var(--bg-panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">

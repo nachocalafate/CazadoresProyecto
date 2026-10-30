@@ -104,9 +104,7 @@
 
             <div class="admin-panel" style="margin-top: 20px;">
                 <h3 style="background-color: var(--accent); color: black; display: inline-block; padding: 5px 15px; border-radius: 4px;">COSTOS DE INSCRIPCIÓN</h3>
-                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Los montos son por torneo. Podés modificar los valores o eliminar categorías con la X roja.</p>
                 
-                <!-- CAJA SEPARADA PARA OBJETIVO Y RETENCIÓN -->
                 <div style="background-color: #0A0A0A; border: 1px solid var(--border); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 15px; margin-bottom: 25px;">
                     <h4 style="margin-top: 0; color: white; margin-bottom: 15px; font-size: 0.95rem;">⚙️ CONFIGURACIÓN GENERAL</h4>
                     <div id="contenedor-sistema-costos" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
@@ -140,7 +138,15 @@
                         <button onclick="editarTorneoActual()" style="background-color: #2EA043; color: white; padding: 12px 20px;">Guardar Cambios</button>
                         <button onclick="eliminarTorneoActual()" style="background-color: #F85149; color: white; padding: 12px 20px;">Eliminar Torneo</button>
                     </div>
+
+                    <!-- BOTÓN PARA CAMBIAR ESTADO A EN CURSO -->
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
+                        <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 1rem; color: white;">Estado de Transmisión</h4>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Al marcarlo "En Curso", aparecerá un cartel rojo titilando en la pantalla principal de los usuarios para avisar que está en vivo.</p>
+                        <button id="btn-estado-torneo" onclick="toggleEstadoTorneoActual()" style="padding: 10px 25px; font-weight: bold;">Cargando estado...</button>
+                    </div>
                 </div>
+
                 <div class="admin-panel" style="margin-bottom: 0;">
                     <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Crear Nuevo Torneo</h3>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
@@ -156,40 +162,11 @@
         </div>
     </main>
 
-    <!-- MODAL EDITAR TIRADOR -->
-    <div id="modal-editar" class="modal">
-        <div class="modal-content">
-            <h2 style="margin-top: 0;">Editar Tirador</h2>
-            <input type="hidden" id="edit-id">
-            <label>Nº Orden</label><input type="number" id="edit-orden" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;">
-            <label>Apellido y Nombre</label><input type="text" id="edit-tirador" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;">
-            <label>Categoría</label>
-            <select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select>
-            <div style="display: flex; gap: 10px;">
-                <button onclick="guardarEdicionTirador()" style="flex: 1; background-color: var(--success);">Guardar</button>
-                <button class="btn-outline" onclick="cerrarModalEditar()" style="flex: 1;">Cancelar</button>
-            </div>
-        </div>
-    </div>
+    <!-- Modales -->
+    <div id="modal-editar" class="modal"><div class="modal-content"><h2 style="margin-top: 0;">Editar Tirador</h2><input type="hidden" id="edit-id"><label>Nº Orden</label><input type="number" id="edit-orden" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Apellido y Nombre</label><input type="text" id="edit-tirador" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Categoría</label><select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select><div style="display: flex; gap: 10px;"><button onclick="guardarEdicionTirador()" style="flex: 1; background-color: var(--success);">Guardar</button><button class="btn-outline" onclick="cerrarModalEditar()" style="flex: 1;">Cancelar</button></div></div></div>
+    <div id="modal-alerta" class="modal"><div class="modal-content" style="text-align: center; max-width: 350px;"><h3 id="alerta-mensaje" style="margin-top: 0; color: white;">Mensaje</h3><button onclick="cerrarAlerta()" style="width: 100%; margin-top: 15px;">OK</button></div></div>
+    <div id="modal-confirm" class="modal"><div class="modal-content" style="text-align: center; max-width: 400px;"><h3 id="confirm-mensaje" style="margin-top: 0; color: white; font-size: 1.1rem; line-height: 1.4;">¿Estás seguro?</h3><div style="display: flex; gap: 10px; margin-top: 25px;"><button id="btn-confirm-ok" style="flex: 1; background-color: var(--danger); color: white;">Confirmar</button><button class="btn-outline" onclick="cerrarConfirmacion()" style="flex: 1;">Cancelar</button></div></div></div>
 
-    <!-- MODAL ALERTA PERSONALIZADA -->
-    <div id="modal-alerta" class="modal">
-        <div class="modal-content" style="text-align: center; max-width: 350px;">
-            <h3 id="alerta-mensaje" style="margin-top: 0; color: white;">Mensaje</h3>
-            <button onclick="cerrarAlerta()" style="width: 100%; margin-top: 15px;">OK</button>
-        </div>
-    </div>
-
-    <!-- MODAL CONFIRMACION PERSONALIZADA -->
-    <div id="modal-confirm" class="modal">
-        <div class="modal-content" style="text-align: center; max-width: 400px;">
-            <h3 id="confirm-mensaje" style="margin-top: 0; color: white; font-size: 1.1rem; line-height: 1.4;">¿Estás seguro?</h3>
-            <div style="display: flex; gap: 10px; margin-top: 25px;">
-                <button id="btn-confirm-ok" style="flex: 1; background-color: var(--danger); color: white;">Confirmar</button>
-                <button class="btn-outline" onclick="cerrarConfirmacion()" style="flex: 1;">Cancelar</button>
-            </div>
-        </div>
-    </div>
     <script src="app.js"></script>
 </body>
 </html>
