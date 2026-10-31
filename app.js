@@ -81,7 +81,7 @@ window.renderizarMaster = function() {
     if (filtrados.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted);">No se encontraron tiradores.</td></tr>'; return; }
     filtrados.forEach(t => {
         let catClass = t.categoria.toLowerCase().includes('vet') ? 'supervet' : (t.categoria.toLowerCase().includes('junior') ? 'junior' : (t.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
-        tbody.innerHTML += `<tr><td style="font-weight: bold; text-transform: uppercase;">${t.nombre}</td><td><span class="tag-categoria ${catClass}">${t.categoria.toUpperCase()}</span></td><td><button class="btn-outline" style="border-color: var(--success); color: var(--success); margin-right: 5px;" onclick="agregarDesdeMaster('${t.nombre}', '${t.categoria}')">+ Agregar al Torneo</button><button class="btn-outline" onclick="abrirModalEditarMaster('${t.id}', '${t.nombre}', '${t.categoria}')">Editar</button></td></tr>`;
+        tbody.innerHTML += `<tr><td style="font-weight: bold; text-transform: uppercase;">${t.nombre}</td><td><span class="tag-categoria ${catClass}">${t.categoria.toUpperCase()}</span></td><td><button class="btn-outline" style="border-color: var(--success); color: var(--success); margin-right: 5px;" onclick="agregarDesdeMaster('${t.nombre}', '${t.categoria}')">+ Agregar al Torneo</button><button class="btn-outline" onclick="abrirModalEditarMaster('${t.id}')">Editar</button></td></tr>`;
     });
 }
 window.guardarTiradorMaster = async function() {
@@ -101,7 +101,14 @@ window.agregarDesdeMaster = async function(nombre, categoria) {
     await clienteSupabase.from('inscripciones').insert([{ torneo_id: torneoAdmin.id, orden: orden, tirador: nombre, categoria: categoria, resultados: resInicial, barrage: 0, ausente: false, paralelos_inscriptos: [] }]);
     await cargarResultados(torneoAdmin.id); avisarALaTV(); abrirPestana('tab-torneos', document.querySelector('.tab-btn:last-child')); mostrarAlerta(`¡Agregado exitosamente con el Nº ${orden}!`);
 }
-window.abrirModalEditarMaster = function(id, nombre, categoria) { document.getElementById('edit-master-id').value = id; document.getElementById('edit-master-nombre').value = nombre; document.getElementById('edit-master-categoria').value = categoria; document.getElementById('modal-editar-master').style.display = 'flex'; }
+window.abrirModalEditarMaster = function(id) {
+    const t = tiradoresMaster.find(x => String(x.id) === String(id)); if (!t) return;
+    const sel = document.getElementById('edit-master-categoria');
+    if (torneoAdmin) renderSelectCategoriasGeneral();
+    if (![...sel.options].some(o => o.value === t.categoria)) sel.innerHTML += `<option value="${t.categoria}">${t.categoria}</option>`;
+    document.getElementById('edit-master-id').value = t.id; document.getElementById('edit-master-nombre').value = t.nombre; sel.value = t.categoria;
+    document.getElementById('modal-editar-master').style.display = 'flex';
+}
 window.cerrarModalEditarMaster = () => document.getElementById('modal-editar-master').style.display = 'none';
 window.guardarEdicionMaster = async function() {
     let id = document.getElementById('edit-master-id').value; let nom = document.getElementById('edit-master-nombre').value.trim(); let cat = document.getElementById('edit-master-categoria').value;
@@ -135,49 +142,104 @@ window.cambiarPlatosPersonalizado = function(prefijo) {
 // ==========================================
 // IMPORTAR EXCEL
 // ==========================================
+const normTxt = (v) => String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+const limpiarTxt = (v) => String(v ?? '').trim().replace(/\s+/g, ' ');
+
 window.importarExcelDesdeArchivo = function(event) {
-    const file = event.target.files[0];
+    const input = event.target; const file = input.files[0];
     if (!file) return;
-    
+    if (!torneoAdmin) { input.value = ''; return mostrarAlerta("Seleccioná un torneo primero."); }
+
     const reader = new FileReader();
     reader.onload = async function(e) {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, {type: 'array'});
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
+        try {
+            const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', blankrows: false });
+            if (filas.length === 0) { input.value = ''; return mostrarAlerta("El Excel está vacío."); }
 
-        let agregados = 0;
-        for (let row of jsonData) {
-            // Mapeo flexible de columnas
-            let ordenStr = row['ORDEN'] || row['Nro'] || row['Orden'] || row['Nº'] || row['Nro Orden'] || row['Nro.'] || row['NRO'];
-            let nombreStr = row['TIRADOR'] || row['Nombre'] || row['Nombre y Apellido'] || row['Tirador'] || row['NOMBRE'];
-            let categoriaStr = row['CAT'] || row['Categoria'] || row['Categoría'] || row['CATEGORIA'] || 'Senior';
-
-            if (ordenStr !== "" && nombreStr !== "") {
-                let orden = parseInt(ordenStr);
-                if (!isNaN(orden) && !tiradoresLocales.some(t => t.orden === orden)) {
-                    let resultadosIniciales = torneoAdmin.modo_sin_limite ? [] : Array(torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)).fill(null);
-                    
-                    await clienteSupabase.from('inscripciones').insert([{
-                        torneo_id: torneoAdmin.id, orden: orden, tirador: nombreStr.toString().trim(), categoria: categoriaStr.toString().trim(),
-                        resultados: resultadosIniciales, barrage: 0, ausente: false, paralelos_inscriptos: []
-                    }]);
-                    agregados++;
-                    
-                    if (!tiradoresMaster.some(t => t.nombre.toLowerCase() === nombreStr.toString().trim().toLowerCase())) {
-                        await clienteSupabase.from('tiradores').insert([{ nombre: nombreStr.toString().trim(), categoria: categoriaStr.toString().trim() }]);
-                    }
-                }
+            // Detectar columnas por encabezado (sin importar mayúsculas, tildes ni orden)
+            const idx = { orden: -1, apellido: -1, nombre: -1, completo: -1, cat: -1 };
+            let filaInicio = 0;
+            filas[0].map(normTxt).forEach((h, i) => {
+                if (!h) return;
+                if (h === 'n' || h === 'nro' || h === 'num' || h === 'numero' || h === 'orden' || h === 'turno' || h.startsWith('nro ') || h.startsWith('n orden') || h.startsWith('numero') || h.startsWith('orden')) { if (idx.orden < 0) idx.orden = i; }
+                else if (h.startsWith('cat')) { if (idx.cat < 0) idx.cat = i; }
+                else if (h === 'apellido' || h === 'apellidos') idx.apellido = i;
+                else if (h === 'nombre' || h === 'nombres') idx.nombre = i;
+                else if (h.includes('apellido') || h.includes('tirador') || h.includes('nombre') || h.includes('participante')) { if (idx.completo < 0) idx.completo = i; }
+            });
+            const hayEncabezado = Object.values(idx).some(v => v >= 0);
+            if (hayEncabezado) filaInicio = 1;
+            else {
+                // Sin encabezados: Nº | Apellido | Nombre | Categoría  (o Nº | Apellido y Nombre | Categoría)
+                const ncol = Math.max(...filas.slice(0, 5).map(f => f.filter(c => c !== '').length));
+                idx.orden = 0;
+                if (ncol >= 4) { idx.apellido = 1; idx.nombre = 2; idx.cat = 3; } else { idx.completo = 1; idx.cat = 2; }
             }
-        }
-        
-        if (agregados > 0) {
+            // Una sola columna de nombre => es el nombre completo
+            if (idx.completo < 0 && idx.apellido >= 0 && idx.nombre < 0) { idx.completo = idx.apellido; idx.apellido = -1; }
+            if (idx.completo < 0 && idx.nombre >= 0 && idx.apellido < 0) { idx.completo = idx.nombre; idx.nombre = -1; }
+            if (idx.completo < 0 && idx.apellido < 0) { input.value = ''; return mostrarAlerta("No encontré las columnas de nombre/apellido en el Excel."); }
+
+            const cats = obtenerCategorias(torneoAdmin);
+            const catPorNorm = {}; cats.forEach(c => catPorNorm[normTxt(c)] = c);
+            const buscarCategoria = (txt) => {
+                const n = normTxt(txt); if (!n) return null;
+                if (catPorNorm[n]) return catPorNorm[n];
+                const k = Object.keys(catPorNorm).find(c => c.startsWith(n) || n.startsWith(c) || c.replace(/ /g, '') === n.replace(/ /g, ''));
+                return k ? catPorNorm[k] : null;
+            };
+
+            const ocupados = new Set(tiradoresLocales.map(t => t.orden));
+            let proximoLibre = 1;
+            const siguienteLibre = () => { while (ocupados.has(proximoLibre)) proximoLibre++; return proximoLibre; };
+            const resInicial = () => torneoAdmin.modo_sin_limite ? [] : Array(torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)).fill(null);
+
+            const nuevos = [], nuevosMaster = [], omitidos = [];
+            const nombresMaster = new Set(tiradoresMaster.map(t => normTxt(t.nombre)));
+            const nombresEnTorneo = new Set(tiradoresLocales.map(t => normTxt(t.tirador)));
+
+            for (let r = filaInicio; r < filas.length; r++) {
+                const f = filas[r];
+                let nombre;
+                if (idx.apellido >= 0 && idx.nombre >= 0) {
+                    const ap = limpiarTxt(f[idx.apellido]), no = limpiarTxt(f[idx.nombre]);
+                    nombre = ap && no ? `${ap}, ${no}` : (ap || no);
+                } else nombre = limpiarTxt(f[idx.completo]);
+                if (!nombre) continue;
+
+                const nNombre = normTxt(nombre);
+                if (nombresEnTorneo.has(nNombre)) { omitidos.push(`${nombre} (ya inscripto)`); continue; }
+
+                let orden = idx.orden >= 0 ? parseInt(String(f[idx.orden]).replace(/[^0-9]/g, '')) : NaN;
+                if (isNaN(orden) || orden <= 0) orden = siguienteLibre();
+                else if (ocupados.has(orden)) { omitidos.push(`${nombre} (Nº ${orden} repetido)`); continue; }
+
+                // Categoría: la del Excel; si no, la de la base histórica; si no, Senior/primera del torneo
+                let categoria = idx.cat >= 0 ? buscarCategoria(f[idx.cat]) : null;
+                if (!categoria) { const m = tiradoresMaster.find(t => normTxt(t.nombre) === nNombre); if (m) categoria = buscarCategoria(m.categoria) || m.categoria; }
+                if (!categoria) categoria = cats.includes('Senior') ? 'Senior' : (cats[0] || 'Senior');
+
+                ocupados.add(orden); nombresEnTorneo.add(nNombre);
+                nuevos.push({ torneo_id: torneoAdmin.id, orden, tirador: nombre, categoria, resultados: resInicial(), barrage: 0, ausente: false, paralelos_inscriptos: [] });
+                if (!nombresMaster.has(nNombre)) { nombresMaster.add(nNombre); nuevosMaster.push({ nombre, categoria }); }
+            }
+
+            if (nuevos.length === 0) {
+                input.value = '';
+                return mostrarAlerta("No se importó ningún tirador." + (omitidos.length ? ` Omitidos: ${omitidos.slice(0, 5).join(', ')}` : " Revisá que el Excel tenga nº de orden, apellido/nombre y categoría."));
+            }
+
+            const { error } = await clienteSupabase.from('inscripciones').insert(nuevos);
+            if (error) { input.value = ''; return mostrarAlerta("Error al importar: " + error.message); }
+            if (nuevosMaster.length) await clienteSupabase.from('tiradores').insert(nuevosMaster);
+
             await cargarResultados(torneoAdmin.id); await cargarMasterDB(); avisarALaTV();
-            mostrarAlerta(`Se importaron ${agregados} tiradores con éxito.`);
-        } else {
-            mostrarAlerta("No se pudo importar nada. Asegurate de que el Excel tenga las columnas ORDEN y TIRADOR.");
+            mostrarAlerta(`Se importaron ${nuevos.length} tiradores.` + (omitidos.length ? ` Omitidos ${omitidos.length}: ${omitidos.slice(0, 5).join(', ')}${omitidos.length > 5 ? '...' : ''}` : ''));
+        } catch (err) {
+            console.error(err); mostrarAlerta("No se pudo leer el archivo Excel.");
         }
-        event.target.value = ""; 
+        input.value = '';
     };
     reader.readAsArrayBuffer(file);
 }
@@ -274,7 +336,7 @@ window.toggleParaleloTirador = async function(idInscripcion, nombreParalelo) { l
 
 function obtenerCategorias(torneoConfig) { if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"]; return Object.keys(torneoConfig.costos).filter(k => k !== "Objetivo" && k !== "Retencion"); }
 function renderizarFiltrosCategorias(containerId, torneoConfig) { const cont = document.getElementById(containerId); if (!cont || !torneoConfig) return; const cats = obtenerCategorias(torneoConfig); let html = `<button class="btn-cat ${filtroCategoria === 'Todas' ? 'active' : ''}" onclick="setFiltroCategoria('Todas')">Todas</button>`; cats.forEach(c => { html += `<button class="btn-cat ${filtroCategoria === c ? 'active' : ''}" onclick="setFiltroCategoria('${c}')">${c}</button>`; }); cont.innerHTML = html; }
-function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
+function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria', 'edit-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
 window.setFiltroCategoria = function(cat) { filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV; if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); } }
 window.setFiltroBusqueda = function(txt) { filtroBusqueda = txt.toLowerCase(); if(esAdmin) cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
