@@ -340,3 +340,9 @@ body.modo-tv-activo #vista-tv { padding-top: 0; }
 @media (max-width: 1400px) { .topbar .reloj { font-size: 2.6rem; } }
 main.container { padding-top: 38px; }
 #nombre-torneo { color: var(--accent-yellow) !important; text-transform: uppercase; letter-spacing: .5px; font-weight: 900; line-height: 1; }
+
+/* Botón vaciar objetivo (panel de jueces) */
+.panel-juez-botones.con-vaciar { grid-template-columns: 1fr 1fr 130px; }
+.btn-juez-vaciar { align-self: center; background-color: #1a1a1a; color: #ddd; border: 2px solid #555; border-radius: 8px; padding: 12px 8px; font-size: 0.9rem; font-weight: 800; line-height: 1.25; cursor: pointer; }
+.btn-juez-vaciar:hover:not(:disabled) { background-color: #2a2a2a; border-color: white; color: white; }
+.btn-juez-vaciar:disabled, .btn-juez-vaciar:disabled:hover { opacity: .35; cursor: not-allowed; background-color: #1a1a1a; }

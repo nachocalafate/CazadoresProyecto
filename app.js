@@ -578,7 +578,7 @@ window.renderizarAdminJueces = function() {
     if (!tiradoresLocales.find(x => x.id === tiradorJuezActivoId)) { tiradorJuezActivoId = (listaMostrar[0] || {}).id; juezPlatoSeleccionadoIdx = null; }
 
     let totP = torneoAdmin.modo_sin_limite ? '∞' : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
-    listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold;">${row.totalTirados}/${totP}</span></div>`; });
+    listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold; white-space: nowrap;">${row.totalTirados}/${totP}${row.barrage > 0 ? ` <span style="color: var(--accent-yellow);">B${row.barrage}</span>` : ''}</span></div>`; });
     renderizarPanelDerechoJuez();
 }
 
@@ -635,28 +635,35 @@ function renderizarPanelDerechoJuez() {
         htmlRondas += '</div>';
     }
 
-    let htmlPlatos = `<div class="plates-container" style="flex-wrap: wrap; justify-content: center; margin-bottom: 20px;">`;
-    
-    if (isSinLimite) {
-        for(let i = 0; i <= t.resultados.length; i++) { 
-            let val = t.resultados[i]; let isSelected = (i === juezPlatoSeleccionadoIdx && !t.ausente) ? 'plato-actual' : ''; 
-            htmlPlatos += `<div class="plate-box admin-plate ${isSelected} ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px; cursor:pointer;" onclick="seleccionarCasillaJuez(${i})">${val === 1 ? '✔' : (val === 0 ? '✖' : (i + 1))}</div>`; 
+    const celdaJuez = (i, num) => {
+        let val = t.resultados[i]; let isSelected = (i === juezPlatoSeleccionadoIdx && !t.ausente) ? 'plato-actual' : '';
+        return `<div class="plate-box admin-plate ${isSelected} ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px; cursor:pointer;" onclick="seleccionarCasillaJuez(${i})">${val === 1 ? '✔' : (val === 0 ? '✖' : num)}</div>`;
+    };
+    let casillas = [];
+    if (isSinLimite) { for (let i = 0; i <= t.resultados.length; i++) casillas.push({ i, num: i + 1 }); }
+    else { for (let i = idxInicioRonda; i < idxFinRonda; i++) casillas.push({ i, num: i - idxInicioRonda + 1 }); }
+
+    let htmlPlatos;
+    if (torneoAdmin.disciplina === 'Plato') {
+        // Plato: bloques de 5 para anotar (igual que en resultados)
+        htmlPlatos = `<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-bottom: 20px;">`;
+        for (let g = 0; g < casillas.length; g += 5) {
+            const grupo = casillas.slice(g, g + 5); const ini = grupo[0].num, fin = grupo[grupo.length - 1].num;
+            htmlPlatos += `<div style="background-color: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 10px; padding: 6px 8px 8px;"><div style="font-size: 0.75rem; color: var(--text-muted); font-weight: bold; margin-bottom: 2px;">${ini === fin ? ini : ini + '-' + fin}</div><div style="display: flex;">${grupo.map(x => celdaJuez(x.i, x.num)).join('')}</div></div>`;
         }
+        htmlPlatos += '</div>';
     } else {
-        for(let i = idxInicioRonda; i < idxFinRonda; i++) { 
-            let val = t.resultados[i]; let isSelected = (i === juezPlatoSeleccionadoIdx && !t.ausente) ? 'plato-actual' : ''; 
-            let textVisual = val === 1 ? '✔' : (val === 0 ? '✖' : (i - idxInicioRonda + 1));
-            htmlPlatos += `<div class="plate-box admin-plate ${isSelected} ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px; cursor:pointer;" onclick="seleccionarCasillaJuez(${i})">${textVisual}</div>`; 
-        }
+        htmlPlatos = `<div class="plates-container" style="flex-wrap: wrap; justify-content: center; margin-bottom: 20px;">${casillas.map(x => celdaJuez(x.i, x.num)).join('')}</div>`;
     }
-    htmlPlatos += '</div>';
     
     let btnRotativoTxt = (torneoAdmin.disciplina === 'Plato' && grupoJuecesActivo !== 'Todos') ? 'Sig. de Escuadra ↺' : 'Siguiente tirador →';
     let labelPos = isSinLimite ? (juezPlatoSeleccionadoIdx + 1) : (juezPlatoSeleccionadoIdx - idxInicioRonda + 1);
     
+    const valAct = t.resultados[juezPlatoSeleccionadoIdx]; const hayDato = valAct !== null && valAct !== undefined;
+    let vaciarBtn = `<button class="btn-juez-vaciar" ${hayDato ? '' : 'disabled'} onclick="vaciarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx})" title="Deja este objetivo sin resultado">Vaciar<br>objetivo</button>`;
     let botonesGrandes = '';
     if (!t.ausente) {
-        botonesGrandes = `<div style="font-size: 0.95rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 10px; text-transform: uppercase;">Modificando Posición Nº ${labelPos}</div><div class="panel-juez-botones"><button class="btn-juez-grande btn-juez-acierto" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 1)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✔</div>ACIERTO</button><button class="btn-juez-grande btn-juez-error" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 0)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✖</div>ERROR</button></div><div style="text-align: center; color: #888; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px;">(Toca arriba cualquier casilla para cambiar de posición)</div>`;
+        botonesGrandes = `<div style="font-size: 0.95rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 10px; text-transform: uppercase;">Modificando Posición Nº ${labelPos}</div><div class="panel-juez-botones con-vaciar"><button class="btn-juez-grande btn-juez-acierto" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 1)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✔</div>ACIERTO</button><button class="btn-juez-grande btn-juez-error" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 0)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✖</div>ERROR</button>${vaciarBtn}</div><div style="text-align: center; color: #888; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px;">(Toca arriba cualquier casilla para cambiar de posición)</div>`;
     }
     
     let serieTxt = isSinLimite ? `TIRADOS: ${t.totalTirados} | ACIERTOS: ${t.totalAciertos}` : `SERIE ${t.totalTirados === (limitRonda * totalVueltas) ? 'COMPLETA' : 'EN CURSO'}: ${t.totalTirados} DE ${limitRonda * totalVueltas} (Aciertos: ${t.totalAciertos})`;
@@ -680,6 +687,18 @@ window.marcarPlatoRapido = async function(idRow, idx, valor) {
         if (siguientePendiente !== -1) { juezPlatoSeleccionadoIdx = siguientePendiente; } else { juezPlatoSeleccionadoIdx = Math.min(idx + 1, idxFinRonda - 1); }
     }
     
+    t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
+    renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
+    actividadTirador[idRow] = Date.now();
+    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV({ tiradorId: idRow });
+}
+
+window.vaciarPlatoRapido = async function(idRow, idx) {
+    let t = tiradoresLocales.find(x => x.id === idRow); if (!t || t.ausente) return;
+    if (idx >= t.resultados.length || t.resultados[idx] === null || t.resultados[idx] === undefined) return;
+    t.resultados[idx] = null;
+    if (torneoAdmin.modo_sin_limite) { while (t.resultados.length && (t.resultados[t.resultados.length - 1] === null || t.resultados[t.resultados.length - 1] === undefined)) t.resultados.pop(); }
+    juezPlatoSeleccionadoIdx = Math.min(idx, torneoAdmin.modo_sin_limite ? t.resultados.length : idx);
     t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
     renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
     actividadTirador[idRow] = Date.now();
