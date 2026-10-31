@@ -251,18 +251,21 @@ window.renderizarTarjetasInicio = function() {
     let filtrados = listaTorneos; if (filtro !== '') filtrados = listaTorneos.filter(t => t.nombre.toLowerCase().includes(filtro));
     if (filtrados.length === 0) return div.innerHTML = '<p style="color:var(--text-muted); font-size:1.2rem;">No se encontraron torneos.</p>';
     
+    const icoCal = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>';
+    const icoCopa = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v6a5 5 0 0 1-10 0V3z"/><path d="M5 5H3v2a4 4 0 0 0 4 4M19 5h2v2a4 4 0 0 1-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 14v4M8 21h8M9 21v-2h6v2"/></svg>';
+
     filtrados.forEach(t => {
-        let fechaFormat = t.fecha ? `<br><span style="font-size: 0.9rem; color: #888;">${t.fecha.split('-').reverse().join('/')}</span>` : '';
-        let badgeLive = t.estado === 'En curso' ? '<span class="badge-en-curso">🔴 EN CURSO</span>' : '';
+        let fechaHtml = t.fecha ? `<div class="card-fecha">${icoCal}<span>${t.fecha.split('-').reverse().join('/')}</span></div>` : '';
+        let badgeLive = t.estado === 'En curso' ? '<div><span class="pill-en-curso"><i class="dot-live"></i>EN CURSO</span></div>' : '';
         let disciplinaStr = t.disciplina ? t.disciplina : 'Helice';
         let word = disciplinaStr === 'Plato' ? 'platos' : 'hélices';
         let objStr = t.modo_sin_limite ? 'Modo Sin Límite' : `${(t.platos_por_serie || 12) * (t.vueltas || 1)} ${word} (${t.vueltas || 1} rondas)`;
-        
-        div.innerHTML += `<div class="card-publica" onclick="abrirVistaTV('${t.id}')"><h3>${t.nombre} ${badgeLive} ${fechaFormat}</h3><p>• ${disciplinaStr} - ${objStr}</p></div>`;
+
+        div.innerHTML += `<div class="card-publica" onclick="abrirVistaTV('${t.id}')"><h3>${t.nombre}</h3>${badgeLive}${fechaHtml}<div class="card-sep"></div><div class="card-info">${icoCopa}<span>${disciplinaStr} - ${objStr}</span></div></div>`;
     });
 }
-window.abrirVistaTV = async function(id) { document.getElementById('vista-inicio').style.display = 'none'; document.getElementById('vista-tv').style.display = 'block'; torneoTV = listaTorneos.find(t => t.id === id); if (!torneoTV.platos_por_serie) torneoTV.platos_por_serie = 12; document.getElementById('nombre-torneo').innerText = torneoTV.nombre; filtroCategoria = 'Todas'; filtroBusqueda = ''; await cargarResultados(torneoTV.id); }
-window.volverAlInicio = function() { document.getElementById('vista-tv').style.display = 'none'; document.getElementById('vista-inicio').style.display = 'block'; torneoTV = null; renderizarTarjetasInicio(); }
+window.abrirVistaTV = async function(id) { document.body.classList.remove('en-inicio'); document.getElementById('vista-inicio').style.display = 'none'; document.getElementById('vista-tv').style.display = 'block'; torneoTV = listaTorneos.find(t => t.id === id); if (!torneoTV.platos_por_serie) torneoTV.platos_por_serie = 12; document.getElementById('nombre-torneo').innerText = torneoTV.nombre; filtroCategoria = 'Todas'; filtroBusqueda = ''; await cargarResultados(torneoTV.id); }
+window.volverAlInicio = function() { document.getElementById('vista-tv').style.display = 'none'; document.body.classList.add('en-inicio'); document.getElementById('vista-inicio').style.display = 'block'; torneoTV = null; renderizarTarjetasInicio(); }
 window.toggleModoTV = function() {
     modoTvActivo = document.getElementById('check-modo-tv').checked; const bodyEl = document.getElementById('body-app');
     if (modoTvActivo) { bodyEl.classList.add('modo-tv-activo'); let docEl = document.documentElement; if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e=>console.log(e)); else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen(); iniciarScrollAutoTV(); } 
@@ -272,7 +275,7 @@ window.toggleModoTV = function() {
 window.cambiarModoTV = function(modo, btn) { modoVistaTV = modo; document.querySelectorAll('.tab-btn-tv').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.modo-tv-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); }); document.getElementById(`contenedor-modo-${modo}`).style.display = 'block'; document.getElementById(`contenedor-modo-${modo}`).classList.add('active'); if (torneoTV) cargarResultados(torneoTV.id); }
 
 let frameScrollTV = null;
-function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.07; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
+function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.25; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
 function detenerScrollAutoTV() { if (frameScrollTV) cancelAnimationFrame(frameScrollTV); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.scrollReal = 0; c.dataset.pausa = "false"; }); }
 
 function renderizarBotonesTorneosAdmin() { const div = document.getElementById('botones-torneos'); if (!div) return; div.innerHTML = ''; listaTorneos.forEach(t => { div.innerHTML += `<button class="btn-torneo ${torneoAdmin && torneoAdmin.id === t.id ? 'admin-selected' : ''}" onclick="seleccionarTorneoAdmin('${t.id}')">${t.nombre}</button>`; }); }
@@ -350,7 +353,7 @@ function estaTirando(row, torneoConfig, maxCols) {
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
 
 function construirGrupos(torneoConfig, maxCols) {
-    const size = torneoConfig.disciplina === 'Plato' ? 5 : 3; // <- tamaño de cada grupo
+    const size = torneoConfig.disciplina === 'Plato' ? 5 : 6; // <- tamaño de cada grupo
     const grupos = []; const sinLim = torneoConfig.modo_sin_limite;
     const porRonda = sinLim ? 0 : torneoConfig.platos_por_serie; const vueltas = sinLim ? 1 : (torneoConfig.vueltas || 1);
     if (porRonda > 0) {

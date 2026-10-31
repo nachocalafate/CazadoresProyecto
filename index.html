@@ -3,37 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Club de Tiro</title>
+    <title>Club Cazadores de Tres Arroyos</title>
+    <link rel="icon" href="logo.png">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body id="body-app">
+<body id="body-app" class="en-inicio">
 
     <!-- BARRA SUPERIOR -->
     <div class="topbar">
-        <h1>CLUB CAZADORES DE TRES ARROYOS</h1>
-        <div style="display: flex; align-items: center; gap: 20px;">
-            <div style="text-align: right;">
+        <div class="marca">
+            <img class="marca-logo" src="logo.png" alt="Club Cazadores de Tres Arroyos">
+            <div class="marca-sep"></div>
+            <h1><span class="t1">CLUB CAZADORES</span> <span class="t2">DE TRES ARROYOS</span></h1>
+        </div>
+        <div class="topbar-derecha">
+            <div class="topbar-reloj">
                 <div id="reloj" class="reloj"></div>
-                <div id="fecha-top" style="font-size: 0.85rem; color: #8B949E; text-transform: uppercase; font-weight: bold; margin-top: 2px;"></div>
+                <div id="fecha-top" class="fecha-top"></div>
             </div>
-            <button id="btn-admin-top" onclick="abrirModalLogin()">Acceso Admin</button>
+            <button id="btn-admin-top" class="btn-admin-top" onclick="abrirModalLogin()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+                Acceso Admin
+            </button>
         </div>
     </div>
 
     <!-- VISTA INICIO: SELECCIÓN DE TORNEOS -->
-    <div id="vista-inicio" class="container" style="max-width: 900px; padding-top: 50px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 30px;">
-            <h1 style="color: white; margin: 0; font-size: 2rem;">TORNEOS DISPONIBLES</h1>
-            
-            <!-- NUEVO BUSCADOR PÚBLICO -->
-            <input type="text" id="buscador-torneos-publico" class="buscador-publico" placeholder="🔍 Buscar por nombre (ej: fosa)..." onkeyup="renderizarTarjetasInicio()">
+    <div id="vista-inicio" class="container vista-inicio">
+        <div class="inicio-cabecera">
+            <div>
+                <h1 class="inicio-titulo">TORNEOS <span>DISPONIBLES</span></h1>
+                <div class="inicio-titulo-barra"></div>
+            </div>
+            <div class="buscador-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                <input type="text" id="buscador-torneos-publico" class="buscador-publico" placeholder="Buscar por nombre (ej: torneo...)" onkeyup="renderizarTarjetasInicio()">
+            </div>
         </div>
-        
+
         <div id="grid-torneos-publicos" class="torneos-grid"></div>
-        
-        <div style="text-align: center; margin-top: 50px;">
-            <button class="btn-outline" onclick="abrirModalLogin()">Acceso Administrador</button>
+
+        <div style="text-align: center; margin-top: 40px;">
+            <button class="btn-admin-home" onclick="abrirModalLogin()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                Acceso Administrador
+            </button>
         </div>
     </div>
     <!-- VISTA PANTALLA TV (Pública) -->
