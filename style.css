@@ -240,3 +240,16 @@ body.modo-tv-activo .pedana-stats .texto-chico { font-size: 1.5rem; }
 /* Cartel TIRANDO */
 .badge-tirando { background-color: #FF8C00; color: black; font-size: 0.65rem; font-weight: 900; padding: 3px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; display: inline-block; letter-spacing: 0.5px; animation: titilarLive 1.5s infinite; box-shadow: 0 0 8px rgba(255, 140, 0, 0.6); }
 body.modo-tv-activo .badge-tirando { font-size: 0.85rem; padding: 4px 8px; }
+
+/* Objetivos agrupados (muchos platos / varias rondas) */
+.grupo-celda { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.grupo-plates { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.plate-mini { width: 11px; height: 11px; border-radius: 2px; background-color: #151515; border: 1px solid #222; display: inline-block; }
+.plate-mini.hit { background-color: var(--success); border-color: var(--success); }
+.plate-mini.miss { background-color: var(--danger); border-color: var(--danger); }
+.grupo-score { font-size: 1rem; font-weight: 900; color: white; line-height: 1; }
+.grupo-score.perfecto { color: #3DDC84; }
+body.modo-tv-activo .plate-mini { width: 16px; height: 16px; }
+body.modo-tv-activo .grupo-score { font-size: 1.5rem; }
+body.modo-tv-activo .split-layout .plate-mini { width: 12px; height: 12px; }
+body.modo-tv-activo .split-layout .grupo-score { font-size: 1.2rem; }

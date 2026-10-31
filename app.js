@@ -272,7 +272,7 @@ window.toggleModoTV = function() {
 window.cambiarModoTV = function(modo, btn) { modoVistaTV = modo; document.querySelectorAll('.tab-btn-tv').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.modo-tv-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); }); document.getElementById(`contenedor-modo-${modo}`).style.display = 'block'; document.getElementById(`contenedor-modo-${modo}`).classList.add('active'); if (torneoTV) cargarResultados(torneoTV.id); }
 
 let frameScrollTV = null;
-function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.07; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
+function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.25; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
 function detenerScrollAutoTV() { if (frameScrollTV) cancelAnimationFrame(frameScrollTV); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.scrollReal = 0; c.dataset.pausa = "false"; }); }
 
 function renderizarBotonesTorneosAdmin() { const div = document.getElementById('botones-torneos'); if (!div) return; div.innerHTML = ''; listaTorneos.forEach(t => { div.innerHTML += `<button class="btn-torneo ${torneoAdmin && torneoAdmin.id === t.id ? 'admin-selected' : ''}" onclick="seleccionarTorneoAdmin('${t.id}')">${t.nombre}</button>`; }); }
@@ -349,6 +349,18 @@ function estaTirando(row, torneoConfig, maxCols) {
 }
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
 
+function construirGrupos(torneoConfig, maxCols) {
+    const size = torneoConfig.disciplina === 'Plato' ? 5 : 3; // <- tamaño de cada grupo
+    const grupos = []; const sinLim = torneoConfig.modo_sin_limite;
+    const porRonda = sinLim ? 0 : torneoConfig.platos_por_serie; const vueltas = sinLim ? 1 : (torneoConfig.vueltas || 1);
+    if (porRonda > 0) {
+        for (let v = 0; v < vueltas; v++) for (let a = 0; a < porRonda; a += size) { const b = Math.min(a + size, porRonda); grupos.push({ ini: v * porRonda + a, fin: v * porRonda + b, ronda: v + 1, desde: a + 1, hasta: b }); }
+    } else {
+        for (let a = 0; a < maxCols; a += size) { const b = Math.min(a + size, maxCols); grupos.push({ ini: a, fin: b, ronda: 1, desde: a + 1, hasta: b }); }
+    }
+    return grupos;
+}
+
 function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
     const theadDOM = document.getElementById(idCabecera); if (!theadDOM || !torneoConfig) return;
     const tabla = theadDOM.parentElement; 
@@ -365,26 +377,44 @@ function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
     listaFiltrada.forEach((row, index) => { if (row.ausente) { row.posicionFija = '-'; return; } let currentScoreIdentifier = `${row.puntajeFinal}-${row.barrage}-${row.totalAciertos}`; if (lastScoreIdentifier !== currentScoreIdentifier) { posActual = index + 1; lastScoreIdentifier = currentScoreIdentifier; } row.posicionFija = posActual; });
 
     const wPos = '4%', wNum = '4%', wTirador = '21%', wCat = '8%', wTot = '5.5%', wBar = '5.5%', wFin = '6%';
-    const wPlato = (46 / Math.max(1, maxCols)) + '%'; 
+    // Con muchos objetivos (>12) se agrupan de a 6 (hélice) o de a 5 (plato), respetando las rondas, y se muestra el parcial "5/6"
+    const agrupar = maxCols > 12; const grupos = agrupar ? construirGrupos(torneoConfig, maxCols) : [];
+    const wPlato = (46 / Math.max(1, agrupar ? grupos.length : maxCols)) + '%'; 
 
     let htmlCabecera = `<thead id="${idCabecera}"><tr><th style="width:${wPos}; text-align:center;">POS.</th><th style="width:${wNum}; text-align:center;">Nº</th><th style="width:${wTirador}; text-align:left; padding-left:15px;">TIRADOR</th><th style="width:${wCat}; text-align:center;">CAT.</th>`;
-    for(let i=1; i<=maxCols; i++) {
+    for(let i=1; i<=(agrupar ? 0 : maxCols); i++) {
         let title = i;
         if (!torneoConfig.modo_sin_limite && (torneoConfig.vueltas || 1) > 1) { let v = Math.ceil(i/torneoConfig.platos_por_serie); let numPlatoEnV = i - ((v-1)*torneoConfig.platos_por_serie); title = `R${v}<br>${numPlatoEnV}`; }
         htmlCabecera += `<th style="width:${wPlato}; text-align:center;">${title}</th>`;
     }
+    if (agrupar) grupos.forEach(g => {
+        const rango = (g.hasta - g.desde === 0) ? `${g.desde}` : `${g.desde}-${g.hasta}`;
+        const titulo = (!torneoConfig.modo_sin_limite && (torneoConfig.vueltas || 1) > 1) ? `R${g.ronda}<br>${rango}` : rango;
+        htmlCabecera += `<th style="width:${wPlato}; text-align:center;">${titulo}</th>`;
+    });
     htmlCabecera += `<th style="width:${wTot}; text-align:center;">TOTAL</th><th style="width:${wBar}; text-align:center;">BARRAGE</th><th style="width:${wFin}; text-align:center;">FINAL</th></tr></thead>`;
 
     function buildFilas(lista) {
         let html = '';
         lista.forEach(row => {
             let htmlPlatosMultiTD = '';
-            for(let i = 0; i < maxCols; i++) {
+            for(let i = 0; i < (agrupar ? 0 : maxCols); i++) {
                 let val = row.resultados[i];
                 if (val === 1) htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box plate-hit mx-auto">✔</div></td>`; 
                 else if (val === 0) htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box plate-miss mx-auto">✖</div></td>`; 
                 else htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box mx-auto">-</div></td>`;
             }
+            if (agrupar) grupos.forEach(g => {
+                let mini = '', hits = 0, tir = 0;
+                for (let k = g.ini; k < g.fin; k++) {
+                    const val = row.resultados[k];
+                    if (val === 1) { hits++; tir++; mini += '<span class="plate-mini hit"></span>'; }
+                    else if (val === 0) { tir++; mini += '<span class="plate-mini miss"></span>'; }
+                    else mini += '<span class="plate-mini"></span>';
+                }
+                const tam = g.fin - g.ini; const sc = tir === 0 ? '-' : `${hits}/${tam}`; const cls = (tir > 0 && hits === tam) ? ' perfecto' : '';
+                htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="grupo-celda"><div class="grupo-plates">${mini}</div><div class="grupo-score${cls}">${sc}</div></div></td>`;
+            });
             let barrageTxt = row.barrage > 0 && !row.ausente ? `<span style="color:var(--accent-yellow); font-weight:900;">${row.barrage}</span>` : '-';
             let enSerieCond = torneoConfig.modo_sin_limite ? (row.totalAciertos > 0 && row.totalAciertos === row.totalTirados) : (row.totalAciertos === maxCols && maxCols > 0);
             let badgeSerie = enSerieCond && !row.ausente ? `<span class="badge-serie">EN SERIE</span>` : '';
