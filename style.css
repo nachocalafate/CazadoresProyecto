@@ -14,7 +14,6 @@
 
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-main); color: var(--text-main); }
 .topbar { background-color: #000000; border-bottom: 3px solid var(--accent-yellow); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; }
-.admin-bar { border-bottom: 2px solid var(--danger); }
 h1 { margin: 0; font-size: 1.3rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: white; }
 h2 { color: white; font-size: 1.1rem; margin-top: 30px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 h3 { font-size: 0.95rem; margin-top: 0; }
@@ -38,7 +37,7 @@ td { padding: 8px 4px; border-bottom: 1px solid var(--border); font-weight: 600;
 th:nth-child(3), td:nth-child(3) { text-align: left; padding-left: 15px; }
 tr:hover { background-color: #111111; }
 
-.admin-panel { background-color: var(--bg-panel); padding: 20px; border-radius: 6px; margin-bottom: 20px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.admin-panel { background-color: var(--bg-panel); padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border); border-top: 3px solid #0f7a4f; display: flex; flex-direction: column; gap: 10px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 15px; }
 
 input, select { padding: 10px; background-color: #111; color: white; border: 1px solid var(--border); border-radius: 4px; font-size: 1rem; }
@@ -60,7 +59,7 @@ button:hover { background-color: var(--accent-hover); }
 .admin-plate:hover { transform: scale(1.1); border-color: white; }
 
 .torneos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px; }
-.btn-torneo { background-color: #111; color: #fff; border: 1px solid #333; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.2s; font-size: 0.9rem;}
+.btn-torneo { background-color: #111; color: #fff; border: 1px solid #333; padding: 15px; border-radius: 10px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.2s; font-size: 0.9rem;}
 .btn-torneo:hover { background-color: #1A1A1A; border-color: white; }
 .btn-torneo.admin-selected { background-color: var(--accent); color: white; border-color: white; }
 
@@ -81,7 +80,7 @@ button:hover { background-color: var(--accent-hover); }
 
 .tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
 .tab-btn { background: none; color: var(--text-muted); padding: 12px 25px; border-radius: 0; font-size: 0.95rem; font-weight: bold; border-bottom: 3px solid transparent; }
-.tab-btn.active { color: white; border-bottom: 3px solid var(--accent); background: transparent; }
+.tab-btn.active { color: white; border-bottom: 3px solid var(--accent-yellow); background: transparent; }
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 
@@ -123,9 +122,9 @@ body.modo-tv-activo .tabs-tv { display: none !important; }
 body.modo-tv-activo .resultados-header { padding: 4px 12px; }
 body.modo-tv-activo .cat-filters { margin-bottom: 4px; padding: 4px 12px; }
 
-body.modo-tv-activo .container { padding: 15px 30px 30px 30px; height: calc(100vh - 75px); box-sizing: border-box; max-width: 100%; }
+body.modo-tv-activo .container { padding: 15px 30px 30px 30px; height: calc(100vh - 82px); box-sizing: border-box; max-width: 100%; }
 
-body.modo-tv-activo .table-container { height: calc(100vh - 130px); max-height: none; display: flex; flex-direction: column; overflow: hidden; border: none; background: transparent; box-shadow: none; }
+body.modo-tv-activo .table-container { height: calc(100vh - 137px); max-height: none; display: flex; flex-direction: column; overflow: hidden; border: none; background: transparent; box-shadow: none; }
 body.modo-tv-activo table { display: flex; flex-direction: column; height: 100%; width: 100%; table-layout: fixed; }
 body.modo-tv-activo thead,
 body.modo-tv-activo .tbody-enserie tr,
@@ -152,7 +151,7 @@ body.modo-tv-activo .resultados-header .tag-resultados { font-size: 1.25rem; pad
 .split-left { background-color: var(--bg-panel); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
 .split-right { background-color: var(--bg-panel); border-radius: 8px; border: 1px solid var(--border); padding: 12px; }
 
-body.modo-tv-activo .split-layout { grid-template-columns: 1fr 520px; gap: 20px; height: calc(100vh - 125px); }
+body.modo-tv-activo .split-layout { grid-template-columns: 1fr 520px; gap: 20px; height: calc(100vh - 132px); }
 body.modo-tv-activo .split-left { height: 100%; display: flex; flex-direction: column; background: transparent; border: none; }
 body.modo-tv-activo .split-layout .table-container { height: 100%; flex-grow: 1; overflow-x: hidden !important; }
 
@@ -260,29 +259,37 @@ body.modo-tv-activo .split-layout .grupo-score { font-size: 1.2rem; }
 ========================================== */
 body.en-inicio { background: #000 url('fondo.jpg') center top / cover no-repeat fixed; min-height: 100vh; }
 
-/* Barra superior: estructura común */
-.topbar { position: relative; }
+/* Barra superior (inicio, torneos y admin) */
+.topbar { position: relative; z-index: 30; background: rgba(0,0,0,.92); padding: 10px 44px; flex-wrap: wrap; gap: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+.topbar::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #0b6b45 0%, #12875a 55%, #0b6b45 100%); }
 .marca { display: flex; align-items: center; min-width: 0; }
-.marca-logo, .marca-sep { display: none; }
-.topbar h1 .t2 { margin-left: .35em; }
+.marca-logo { display: block; width: 128px; height: 128px; margin-bottom: -28px; flex-shrink: 0; position: relative; z-index: 31; filter: drop-shadow(0 4px 10px rgba(0,0,0,.85)); }
+.marca-sep { display: block; width: 3px; height: 62px; background: var(--accent-yellow); margin: 0 26px; border-radius: 2px; flex-shrink: 0; }
+.topbar h1 { display: flex; flex-direction: column; gap: 9px; line-height: 1; }
+.topbar h1 .t1 { font-size: 2.15rem; letter-spacing: .5px; }
+.topbar h1 .t2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: .42em; color: var(--accent-yellow); }
+.topbar h1 .t2.t2-admin { font-size: 1rem; letter-spacing: .28em; }
 .topbar-derecha { display: flex; align-items: center; gap: 20px; }
 .topbar-reloj { text-align: right; }
-.fecha-top { font-size: 0.85rem; color: #8B949E; text-transform: uppercase; font-weight: bold; margin-top: 2px; }
-.btn-admin-top { display: inline-flex; align-items: center; gap: 8px; }
+.topbar .reloj { font-size: 3.3rem; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+.fecha-top { font-size: 0.85rem; color: #C9D1D9; text-transform: uppercase; font-weight: bold; margin-top: 6px; }
+.btn-admin-top { display: inline-flex; align-items: center; gap: 8px; background: rgba(6,64,43,.6); border: 1px solid #1f8a5b; border-radius: 8px; padding: 12px 18px; font-weight: 600; font-size: .95rem; letter-spacing: 0; color: white; text-decoration: none; cursor: pointer; white-space: nowrap; transition: .2s; }
+.btn-admin-top:hover { background: var(--accent-hover); }
 .btn-admin-top svg { width: 18px; height: 18px; }
+.btn-admin-top.btn-salir { background: rgba(220,53,69,.12); border-color: var(--danger); color: #ff6b78; }
+.btn-admin-top.btn-salir:hover { background: rgba(220,53,69,.28); }
 
-/* Barra superior: versión inicio */
-body.en-inicio .topbar { background: rgba(0,0,0,.9); padding: 10px 44px; z-index: 30; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
-body.en-inicio .topbar::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg, #0b6b45 0%, #12875a 55%, #0b6b45 100%); }
-body.en-inicio .marca-logo { display: block; width: 128px; height: 128px; margin-bottom: -28px; flex-shrink: 0; position: relative; z-index: 31; filter: drop-shadow(0 4px 10px rgba(0,0,0,.85)); }
-body.en-inicio .marca-sep { display: block; width: 3px; height: 62px; background: var(--accent-yellow); margin: 0 26px; border-radius: 2px; flex-shrink: 0; }
-body.en-inicio .topbar h1 { display: flex; flex-direction: column; gap: 9px; line-height: 1; }
-body.en-inicio .topbar h1 .t1 { font-size: 2.15rem; letter-spacing: .5px; }
-body.en-inicio .topbar h1 .t2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: .42em; color: var(--accent-yellow); }
-body.en-inicio .reloj { font-size: 3.3rem; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
-body.en-inicio .fecha-top { color: #C9D1D9; margin-top: 6px; }
-body.en-inicio .btn-admin-top { background: rgba(6,64,43,.6); border: 1px solid #1f8a5b; border-radius: 8px; padding: 12px 18px; font-weight: 600; letter-spacing: 0; }
-body.en-inicio .btn-admin-top:hover { background: var(--accent-hover); }
+/* Barra superior compacta en Modo TV (para no perder espacio) */
+body.modo-tv-activo .topbar { padding: 6px 30px; }
+body.modo-tv-activo .marca-logo { width: 84px; height: 84px; margin-bottom: -12px; }
+body.modo-tv-activo .marca-sep { height: 44px; margin: 0 18px; }
+body.modo-tv-activo .topbar h1 { gap: 5px; }
+body.modo-tv-activo .topbar h1 .t1 { font-size: 1.5rem; }
+body.modo-tv-activo .topbar h1 .t2 { font-size: .75rem; }
+body.modo-tv-activo .topbar .reloj { font-size: 2.4rem; }
+body.modo-tv-activo .fecha-top { margin-top: 3px; font-size: .8rem; }
+#vista-tv { padding-top: 26px; }
+body.modo-tv-activo #vista-tv { padding-top: 0; }
 
 /* Título + buscador */
 .vista-inicio { max-width: 920px; padding-top: 70px; }
@@ -317,14 +324,19 @@ body.en-inicio .btn-admin-top:hover { background: var(--accent-hover); }
 
 /* Pantallas chicas */
 @media (max-width: 760px) {
-    body.en-inicio .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 10px; }
-    body.en-inicio .marca-logo { width: 76px; height: 76px; margin-bottom: -18px; }
-    body.en-inicio .marca-sep { height: 40px; margin: 0 14px; }
-    body.en-inicio .topbar h1 .t1 { font-size: 1.2rem; }
-    body.en-inicio .topbar h1 .t2 { font-size: .7rem; letter-spacing: .3em; }
-    body.en-inicio .reloj { font-size: 1.9rem; }
+    .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 10px; }
+    .marca-logo { width: 76px; height: 76px; margin-bottom: -18px; }
+    .marca-sep { height: 40px; margin: 0 14px; }
+    .topbar h1 .t1 { font-size: 1.2rem; }
+    .topbar h1 .t2 { font-size: .7rem; letter-spacing: .3em; }
+    .topbar .reloj { font-size: 1.9rem; }
+    .topbar-derecha { flex-wrap: wrap; gap: 10px; }
     .vista-inicio { padding-top: 50px; }
     .inicio-titulo { font-size: 1.8rem; }
     .buscador-wrap { width: 100%; }
 }
 .buscador-wrap svg { z-index: 2; }
+
+@media (max-width: 1400px) { .topbar .reloj { font-size: 2.6rem; } }
+main.container { padding-top: 38px; }
+#nombre-torneo { color: var(--accent-yellow) !important; text-transform: uppercase; letter-spacing: .5px; font-weight: 900; line-height: 1; }
