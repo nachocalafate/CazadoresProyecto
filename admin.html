@@ -121,6 +121,8 @@
         <div id="tab-torneos" class="tab-pane">
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 
+                <!-- Opciones del torneo + Crear torneo (mitad y mitad) -->
+                <div class="fila-2col">
                 <!-- Opciones de torneo actual -->
                 <div class="admin-panel" style="margin-bottom: 0;">
                     <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Opciones del Torneo Seleccionado</h3>
@@ -159,6 +161,41 @@
                         <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 1rem; color: white;">Estado de Transmisión</h4>
                         <button id="btn-estado-torneo" onclick="toggleEstadoTorneoActual()" style="padding: 10px 25px; font-weight: bold;">Cargando estado...</button>
                     </div>
+                </div>
+
+                <!-- Crear torneo -->
+                <div class="admin-panel" style="margin-bottom: 0;">
+                    <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Crear Nuevo Torneo</h3>
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="input-nuevo-torneo" placeholder="Ej: Torneo Social" style="flex: 1; margin: 0; box-sizing: border-box;">
+                        <input type="date" id="input-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
+                        
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Disciplina:</label>
+                            <select id="input-disciplina" onchange="cambiarDisciplinaUi('input')" style="width: 100px; margin: 0; padding: 8px;">
+                                <option value="Helice" selected>Hélice</option>
+                                <option value="Plato">Plato</option>
+                            </select>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Vueltas:</label>
+                            <input type="number" id="input-vueltas" style="width: 60px; margin: 0; padding: 8px;" value="1" min="1">
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Obj. p/vuelta:</label>
+                            <select id="input-platos" onchange="cambiarPlatosPersonalizado('input')" style="width: 110px; margin: 0; padding: 8px;"></select>
+                            <input type="number" id="input-platos-custom" placeholder="Cant." style="width: 60px; margin: 0; padding: 8px; display: none;">
+                        </div>
+
+                        <div id="input-grupo-container" style="display: none; align-items: center; gap: 5px;">
+                            <label style="color: white; font-size: 0.85rem;">Escuadra:</label>
+                            <input type="number" id="input-grupo-size" style="width: 60px; margin: 0; padding: 8px;" value="5">
+                        </div>
+                        <button onclick="crearTorneo()" style="background-color: var(--accent); color: white; padding: 12px 20px;">Crear Torneo</button>
+                    </div>
+                </div>
                 </div>
 
                 <!-- Paralelos -->
@@ -215,40 +252,6 @@
                             <thead><tr><th>Nº</th><th>TIRADOR</th><th>CAT.</th><th>PARALELOS</th><th>A COBRAR</th><th>ACCIONES</th></tr></thead>
                             <tbody id="lista-edicion-tiradores"></tbody>
                         </table>
-                    </div>
-                </div>
-
-                <!-- Crear torneo -->
-                <div class="admin-panel" style="margin-bottom: 0;">
-                    <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Crear Nuevo Torneo</h3>
-                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-                        <input type="text" id="input-nuevo-torneo" placeholder="Ej: Torneo Social" style="flex: 1; margin: 0; box-sizing: border-box;">
-                        <input type="date" id="input-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
-                        
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <label style="font-size: 0.8rem; color: #AAA;">Disciplina:</label>
-                            <select id="input-disciplina" onchange="cambiarDisciplinaUi('input')" style="width: 100px; margin: 0; padding: 8px;">
-                                <option value="Helice" selected>Hélice</option>
-                                <option value="Plato">Plato</option>
-                            </select>
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <label style="font-size: 0.8rem; color: #AAA;">Vueltas:</label>
-                            <input type="number" id="input-vueltas" style="width: 60px; margin: 0; padding: 8px;" value="1" min="1">
-                        </div>
-
-                        <div style="display: flex; align-items: center; gap: 5px;">
-                            <label style="font-size: 0.8rem; color: #AAA;">Obj. p/vuelta:</label>
-                            <select id="input-platos" onchange="cambiarPlatosPersonalizado('input')" style="width: 110px; margin: 0; padding: 8px;"></select>
-                            <input type="number" id="input-platos-custom" placeholder="Cant." style="width: 60px; margin: 0; padding: 8px; display: none;">
-                        </div>
-
-                        <div id="input-grupo-container" style="display: none; align-items: center; gap: 5px;">
-                            <label style="color: white; font-size: 0.85rem;">Escuadra:</label>
-                            <input type="number" id="input-grupo-size" style="width: 60px; margin: 0; padding: 8px;" value="5">
-                        </div>
-                        <button onclick="crearTorneo()" style="background-color: var(--accent); color: white; padding: 12px 20px;">Crear Torneo</button>
                     </div>
                 </div>
             </div>
