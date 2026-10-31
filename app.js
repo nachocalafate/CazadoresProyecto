@@ -82,7 +82,7 @@ window.renderizarMaster = function() {
     if (filtrados.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted);">No se encontraron tiradores.</td></tr>'; return; }
     filtrados.forEach(t => {
         let catClass = t.categoria.toLowerCase().includes('vet') ? 'supervet' : (t.categoria.toLowerCase().includes('junior') ? 'junior' : (t.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
-        tbody.innerHTML += `<tr><td style="font-weight: bold; text-transform: uppercase;">${t.nombre}</td><td><span class="tag-categoria ${catClass}">${t.categoria.toUpperCase()}</span></td><td><button class="btn-outline" style="border-color: var(--success); color: var(--success); margin-right: 5px;" onclick="agregarDesdeMaster('${t.nombre}', '${t.categoria}')">+ Agregar al Torneo</button><button class="btn-outline" onclick="abrirModalEditarMaster('${t.id}')">Editar</button></td></tr>`;
+        tbody.innerHTML += `<tr><td style="font-weight: bold; text-transform: uppercase;">${t.nombre}</td><td><span class="tag-categoria ${catClass}">${t.categoria.toUpperCase()}</span></td><td><button class="btn-outline" style="border-color: var(--success); color: var(--success); margin-right: 5px;" onclick="agregarDesdeMaster('${t.nombre}', '${t.categoria}')">+ Agregar al Torneo</button><button class="btn-outline" onclick="abrirModalEditarMaster('${t.id}')">Editar</button> <button class="btn-outline-danger" onclick="eliminarTiradorMaster('${t.id}')">Eliminar</button></td></tr>`;
     });
 }
 window.guardarTiradorMaster = async function() {
@@ -109,6 +109,14 @@ window.abrirModalEditarMaster = function(id) {
     if (![...sel.options].some(o => o.value === t.categoria)) sel.innerHTML += `<option value="${t.categoria}">${t.categoria}</option>`;
     document.getElementById('edit-master-id').value = t.id; document.getElementById('edit-master-nombre').value = t.nombre; sel.value = t.categoria;
     document.getElementById('modal-editar-master').style.display = 'flex';
+}
+window.eliminarTiradorMaster = function(id) {
+    const t = tiradoresMaster.find(x => String(x.id) === String(id)); if (!t) return;
+    mostrarConfirmacion(`¿Eliminar a ${t.nombre.toUpperCase()} de la base de datos histórica? (No se borra de los torneos donde ya está inscripto)`, async () => {
+        const { error } = await clienteSupabase.from('tiradores').delete().eq('id', id);
+        if (error) return mostrarAlerta("No se pudo eliminar: " + error.message);
+        await cargarMasterDB();
+    });
 }
 window.cerrarModalEditarMaster = () => document.getElementById('modal-editar-master').style.display = 'none';
 window.guardarEdicionMaster = async function() {
@@ -338,7 +346,8 @@ window.agregarParalelo = async function() { let nombre = document.getElementById
 window.eliminarParalelo = async function(nombre) { mostrarConfirmacion(`¿Eliminar paralelo ${nombre}?`, async () => { torneoAdmin.paralelos = torneoAdmin.paralelos.filter(p => p.nombre !== nombre); await clienteSupabase.from('torneos').update({ paralelos: torneoAdmin.paralelos }).eq('id', torneoAdmin.id); renderizarParalelosConfig(); renderizarAdminBaseDatosTorneo(); }); }
 window.toggleParaleloTirador = async function(idInscripcion, nombreParalelo) { let t = tiradoresLocales.find(x => x.id === idInscripcion); if (!t) return; if (!t.paralelos_inscriptos) t.paralelos_inscriptos = []; if (t.paralelos_inscriptos.includes(nombreParalelo)) { t.paralelos_inscriptos = t.paralelos_inscriptos.filter(p => p !== nombreParalelo); } else { t.paralelos_inscriptos.push(nombreParalelo); } renderizarAdminBaseDatosTorneo(); await clienteSupabase.from('inscripciones').update({ paralelos_inscriptos: t.paralelos_inscriptos }).eq('id', t.id); }
 
-function obtenerCategorias(torneoConfig) { if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"]; return Object.keys(torneoConfig.costos).filter(k => k !== "Objetivo" && k !== "Retencion"); }
+const CLAVES_SISTEMA_COSTOS = ["Objetivo", "Retencion", "RetModo", "RetCat"]; // no son categorías
+function obtenerCategorias(torneoConfig) { if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"]; return Object.keys(torneoConfig.costos).filter(k => !CLAVES_SISTEMA_COSTOS.includes(k)); }
 function renderizarFiltrosCategorias(containerId, torneoConfig) { const cont = document.getElementById(containerId); if (!cont || !torneoConfig) return; const cats = obtenerCategorias(torneoConfig); let html = `<button class="btn-cat ${filtroCategoria === 'Todas' ? 'active' : ''}" onclick="setFiltroCategoria('Todas')">Todas</button>`; cats.forEach(c => { html += `<button class="btn-cat ${filtroCategoria === c ? 'active' : ''}" onclick="setFiltroCategoria('${c}')">${c}</button>`; }); cont.innerHTML = html; }
 function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria', 'edit-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
 window.setFiltroCategoria = function(cat) { filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV; if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); } }
@@ -534,6 +543,49 @@ function htmlStatsObjetivos(presentes) {
         <div style="display: flex; align-items: flex-end; gap: 8px; overflow-x: auto;">${barras}</div></div>`;
 }
 
+function calcularFinanzasCategorias(presentes) {
+    const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000 };
+    const modo = costos.RetModo === 'categoria' ? 'categoria' : 'general'; // solo una de las dos retenciones trabaja a la vez
+    const pctRet = costos.Retencion !== undefined ? Number(costos.Retencion) : 10;
+    const retCat = costos.RetCat || {};
+    const valObj = costos.Objetivo !== undefined ? Number(costos.Objetivo) : 1000;
+    const paralelos = torneoAdmin.paralelos || [];
+    const cats = [...obtenerCategorias(torneoAdmin)];
+    presentes.forEach(t => { if (!cats.includes(t.categoria)) cats.push(t.categoria); });
+
+    const filas = cats.map(cat => {
+        const lista = presentes.filter(t => t.categoria === cat);
+        let recaudado = 0, tirados = 0;
+        lista.forEach(t => {
+            recaudado += (costos[cat] || 0);
+            (t.paralelos_inscriptos || []).forEach(n => { const p = paralelos.find(x => x.nombre === n); if (p) recaudado += p.costo; });
+            t.resultados.forEach(r => { if (r !== null && r !== undefined) tirados++; });
+        });
+        // General: % de lo recaudado. Por categoría: monto fijo por tirador (nunca más de lo recaudado)
+        const retencion = (modo === 'categoria') ? Math.min(recaudado, (Number(retCat[cat]) || 0) * lista.length) : Math.round(recaudado * pctRet / 100);
+        const objetivos = tirados * valObj;
+        const premio = Math.max(0, recaudado - retencion - objetivos);
+        const club = recaudado - premio;
+        return { cat, n: lista.length, recaudado, retencion, objetivos, club, premio };
+    });
+    const total = filas.reduce((a, f) => ({ n: a.n + f.n, recaudado: a.recaudado + f.recaudado, retencion: a.retencion + f.retencion, objetivos: a.objetivos + f.objetivos, club: a.club + f.club, premio: a.premio + f.premio }), { n: 0, recaudado: 0, retencion: 0, objetivos: 0, club: 0, premio: 0 });
+    return { filas, total, modo, pctRet, retCat, valObj, paralelos };
+}
+
+function htmlTablaFinanzas(fin) {
+    const $ = n => `$ ${Math.round(n).toLocaleString('es-AR')}`;
+    const filasHtml = fin.filas.map(f => `<tr><td>${f.cat}</td><td>${f.n}</td><td>${$(f.recaudado)}</td><td>${$(f.retencion)}</td><td>${$(f.objetivos)}</td><td>${$(f.club)}</td><td class="col-premio">${$(f.premio)}</td></tr>`).join('');
+    const t = fin.total;
+    const porCat = fin.modo === 'categoria';
+    const retTxt = porCat
+        ? `Retención por categoría, por tirador: ${fin.filas.map(f => `${f.cat} ${$(fin.retCat[f.cat] || 0)}`).join(' · ')}.`
+        : `El club retiene el ${fin.pctRet}% de lo recaudado.`;
+    const nota = `${retTxt} Además, ${$(fin.valObj)} por objetivo tirado.` + (fin.paralelos.length ? (porCat ? ' El recaudado incluye los paralelos, que no tienen retención.' : ' El recaudado incluye los paralelos de cada tirador.') : '') + ' Solo cuenta tiradores presentes.';
+    return `<h2 class="titulo-amarillo" style="margin-top: 30px;">FINANZAS POR CATEGORÍA</h2>
+    <div class="finanzas-wrap"><table class="tabla-finanzas"><thead><tr><th>CATEGORÍA</th><th>TIRADORES</th><th>RECAUDADO</th><th>RETENCIÓN${porCat ? '' : ' ' + fin.pctRet + '%'}</th><th>OBJETIVOS</th><th>CLUB</th><th>PREMIO</th></tr></thead><tbody>${filasHtml}<tr class="fila-total"><td>Total</td><td>${t.n}</td><td>${$(t.recaudado)}</td><td>${$(t.retencion)}</td><td>${$(t.objetivos)}</td><td>${$(t.club)}</td><td class="col-premio">${$(t.premio)}</td></tr></tbody></table></div>
+    <div class="finanzas-notas">${nota}</div>`;
+}
+
 function renderizarStats() {
     const cont = document.getElementById('contenedor-stats'); if (!cont || !torneoAdmin) return; if (tiradoresLocales.length === 0) { cont.innerHTML = '<p>No hay datos.</p>'; return; }
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
@@ -541,23 +593,39 @@ function renderizarStats() {
     let paralelos = torneoAdmin.paralelos || [];
     presentes.forEach(t => { if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++; else catsCount[t.categoria] = 1; let subtotal = (costos[t.categoria] || 0); let pins = t.paralelos_inscriptos || []; paralelos.forEach(p => { if(pins.includes(p.nombre)) subtotal += p.costo; }); recaudado += subtotal; t.resultados.forEach(r => { if(r !== null && r !== undefined) { tirados++; if(r===1) pegados++; else errados++; } }); });
     let premios = Math.max(0, recaudado - (tirados * (costos["Objetivo"] || 1000)) - ((recaudado * (costos["Retencion"] || 10)) / 100));
+    const fin = calcularFinanzasCategorias(presentes); recaudado = fin.total.recaudado; premios = fin.total.premio; // los tres cuadros de abajo salen del mismo cálculo que la tabla
     let htmlCatsGrid = ''; catsList.forEach(c => { htmlCatsGrid += `<div class="stat-box"><h4>${c.toUpperCase()}</h4><div class="val">${catsCount[c] || 0}</div></div>`; });
-    cont.innerHTML = `<h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div><div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${torneoAdmin.modo_sin_limite?'Sin límite':`${totTiradores} pres. x ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)} platos`}</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${torneoAdmin.modo_sin_limite?'-':(totObjetivos - tirados)} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div>${htmlStatsObjetivos(presentes)}<h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div><h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}<h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div><div class="sub">Inscripciones + Paralelos</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>`;
+    cont.innerHTML = `<h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div><div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${torneoAdmin.modo_sin_limite?'Sin límite':`${totTiradores} pres. x ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)} platos`}</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${torneoAdmin.modo_sin_limite?'-':(totObjetivos - tirados)} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div>${htmlStatsObjetivos(presentes)}<h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div><h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}<h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div><div class="sub">Inscripciones + Paralelos</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>${htmlTablaFinanzas(fin)}`;
 }
 
 function cargarFormularioCostos() {
-    if (!torneoAdmin) return; const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
+    if (!torneoAdmin) return;
+    const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
+    const modo = costos.RetModo === 'categoria' ? 'categoria' : 'general';
+    const retCat = costos.RetCat || {};
     const contCat = document.getElementById('contenedor-inputs-costos'); const contSis = document.getElementById('contenedor-sistema-costos');
-    if(!contCat || !contSis) return; contCat.innerHTML = ''; contSis.innerHTML = '';
-    for (let key in costos) {
-        let isSystem = (key === "Objetivo" || key === "Retencion"); let label = key === "Objetivo" ? "Valor del objetivo ($)" : (key === "Retencion" ? "% retención del club" : `Inscripción ${key}`);
-        if (isSystem) { contSis.innerHTML += `<div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;"><label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold; display:block; margin-bottom:8px;">${label}</label><input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="width:100%; box-sizing:border-box; background-color: #000;"></div>`; } 
-        else { contCat.innerHTML += `<div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${label}</label><button class="btn-outline-danger" style="padding: 2px 6px; font-size: 0.7rem; line-height: 1;" onclick="eliminarCategoriaConfig('${key}')">X</button></div><input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="width:100%; box-sizing:border-box; background-color: #000;"></div>`; }
-    }
+    if (!contCat || !contSis) return; contCat.innerHTML = ''; contSis.innerHTML = '';
+    const inputStyle = 'width:100%; box-sizing:border-box; background-color: #000;';
+    const caja = (label, inner, id, oculto) => `<div ${id ? `id="${id}"` : ''} style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222; ${oculto ? 'display:none;' : ''}"><label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold; display:block; margin-bottom:8px;">${label}</label>${inner}</div>`;
+
+    contSis.innerHTML += caja('Valor del objetivo ($)', `<input type="number" class="input-costo-guardar" data-key="Objetivo" value="${costos.Objetivo !== undefined ? costos.Objetivo : 1000}" style="${inputStyle}">`);
+    contSis.innerHTML += caja('Tipo de retención del club', `<select id="select-ret-modo" onchange="cambiarModoRetencion()" style="${inputStyle}"><option value="general" ${modo === 'general' ? 'selected' : ''}>General (% de lo recaudado)</option><option value="categoria" ${modo === 'categoria' ? 'selected' : ''}>Por categoría ($ por tirador)</option></select>`);
+    contSis.innerHTML += caja('% retención del club (general)', `<input type="number" step="any" class="input-costo-guardar" data-key="Retencion" value="${costos.Retencion !== undefined ? costos.Retencion : 10}" style="${inputStyle}">`, 'wrap-ret-general', modo !== 'general');
+
+    Object.keys(costos).filter(k => !CLAVES_SISTEMA_COSTOS.includes(k)).forEach(key => {
+        contCat.innerHTML += `<div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">Inscripción ${key}</label><button class="btn-outline-danger" style="padding: 2px 6px; font-size: 0.7rem; line-height: 1;" onclick="eliminarCategoriaConfig('${key}')">X</button></div><input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="${inputStyle}"><div class="wrap-ret-cat" style="display: ${modo === 'categoria' ? 'block' : 'none'}; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #333;"><label style="font-size: 0.75rem; color: var(--accent-yellow); font-weight: bold; display:block; margin-bottom:6px;">Retención del club ($ por tirador)</label><input type="number" step="any" class="input-ret-cat" data-cat="${key}" value="${retCat[key] !== undefined ? retCat[key] : 0}" style="${inputStyle}"></div></div>`;
+    });
+}
+window.cambiarModoRetencion = function() {
+    const m = document.getElementById('select-ret-modo').value;
+    const g = document.getElementById('wrap-ret-general'); if (g) g.style.display = (m === 'general') ? 'block' : 'none';
+    document.querySelectorAll('.wrap-ret-cat').forEach(e => e.style.display = (m === 'categoria') ? 'block' : 'none');
 }
 window.agregarCategoriaConfig = function() { if (!torneoAdmin) return; const nuevaCat = document.getElementById('input-nueva-cat').value.trim(); if (!nuevaCat) return mostrarAlerta("Ingrese el nombre de la nueva categoría."); if (!torneoAdmin.costos) torneoAdmin.costos = {}; if (torneoAdmin.costos[nuevaCat] !== undefined) return mostrarAlerta("Esa categoría ya existe."); torneoAdmin.costos[nuevaCat] = 0; document.getElementById('input-nueva-cat').value = ''; cargarFormularioCostos(); renderSelectCategoriasGeneral(); mostrarAlerta(`Categoría "${nuevaCat}" agregada. Presioná 'Guardar Costos'.`); }
-window.eliminarCategoriaConfig = function(catKey) { mostrarConfirmacion(`¿Eliminar categoría "${catKey}"?`, async () => { delete torneoAdmin.costos[catKey]; await clienteSupabase.from('torneos').update({ costos: torneoAdmin.costos }).eq('id', torneoAdmin.id); cargarFormularioCostos(); renderSelectCategoriasGeneral(); renderizarAdminBaseDatosTorneo(); renderizarStats(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Eliminada correctamente."); }); }
-window.guardarCostos = async function() { if (!torneoAdmin) return; let nuevosCostos = {}; document.querySelectorAll('.input-costo-guardar').forEach(inp => { nuevosCostos[inp.getAttribute('data-key')] = parseInt(inp.value) || 0; }); await clienteSupabase.from('torneos').update({ costos: nuevosCostos }).eq('id', torneoAdmin.id); torneoAdmin.costos = nuevosCostos; renderizarAdminBaseDatosTorneo(); renderizarStats(); renderSelectCategoriasGeneral(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Costos actualizados con éxito."); }
+window.eliminarCategoriaConfig = function(catKey) { mostrarConfirmacion(`¿Eliminar categoría "${catKey}"?`, async () => { delete torneoAdmin.costos[catKey]; if (torneoAdmin.costos.RetCat) delete torneoAdmin.costos.RetCat[catKey]; await clienteSupabase.from('torneos').update({ costos: torneoAdmin.costos }).eq('id', torneoAdmin.id); cargarFormularioCostos(); renderSelectCategoriasGeneral(); renderizarAdminBaseDatosTorneo(); renderizarStats(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Eliminada correctamente."); }); }
+window.guardarCostos = async function() { if (!torneoAdmin) return; let nuevosCostos = {}; document.querySelectorAll('.input-costo-guardar').forEach(inp => { nuevosCostos[inp.getAttribute('data-key')] = parseFloat(inp.value) || 0; });
+    const selModo = document.getElementById('select-ret-modo'); nuevosCostos.RetModo = selModo ? selModo.value : 'general';
+    nuevosCostos.RetCat = {}; document.querySelectorAll('.input-ret-cat').forEach(inp => { nuevosCostos.RetCat[inp.getAttribute('data-cat')] = parseFloat(inp.value) || 0; }); await clienteSupabase.from('torneos').update({ costos: nuevosCostos }).eq('id', torneoAdmin.id); torneoAdmin.costos = nuevosCostos; renderizarAdminBaseDatosTorneo(); renderizarStats(); renderSelectCategoriasGeneral(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Costos actualizados con éxito."); }
 
 function getGruposPlato() { if (!torneoAdmin || torneoAdmin.disciplina !== 'Plato') return []; let size = torneoAdmin.tamano_grupo || 1; let ordenados = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); let grupos = []; for (let i = 0; i < ordenados.length; i += size) { grupos.push(ordenados.slice(i, i + size)); } return grupos; }
 

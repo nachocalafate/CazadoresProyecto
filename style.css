@@ -346,3 +346,17 @@ main.container { padding-top: 38px; }
 .btn-juez-vaciar { align-self: center; background-color: #1a1a1a; color: #ddd; border: 2px solid #555; border-radius: 8px; padding: 12px 8px; font-size: 0.9rem; font-weight: 800; line-height: 1.25; cursor: pointer; }
 .btn-juez-vaciar:hover:not(:disabled) { background-color: #2a2a2a; border-color: white; color: white; }
 .btn-juez-vaciar:disabled, .btn-juez-vaciar:disabled:hover { opacity: .35; cursor: not-allowed; background-color: #1a1a1a; }
+
+/* Cuadro de finanzas por categoría (estadísticas) */
+.finanzas-wrap { background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 0 10px 10px 10px; overflow-x: auto; }
+.tabla-finanzas { width: 100%; border-collapse: collapse; table-layout: auto; white-space: nowrap; }
+.tabla-finanzas thead th { position: static; background-color: var(--accent); color: white; font-size: 0.95rem; padding: 14px 12px; border-bottom: 4px solid var(--accent-yellow); letter-spacing: .5px; text-align: center; }
+.tabla-finanzas td { font-size: 1.15rem; padding: 12px 12px; text-align: center; border-bottom: 1px solid var(--border); font-weight: 600; }
+.tabla-finanzas th:first-child, .tabla-finanzas td:first-child { text-align: left; padding-left: 20px; }
+.tabla-finanzas td:first-child { font-weight: 900; font-size: 1.25rem; }
+.tabla-finanzas th:nth-child(3), .tabla-finanzas td:nth-child(3) { text-align: center; padding-left: 12px; }
+.tabla-finanzas tbody tr:nth-child(even) { background-color: #0f0f0f; }
+.tabla-finanzas td.col-premio { font-weight: 900; }
+.tabla-finanzas td.todo-club { color: #9DB4D0; font-weight: 500; }
+.tabla-finanzas tr.fila-total td { background-color: #050505; border-top: 2px solid var(--accent); font-size: 1.3rem; font-weight: 900; border-bottom: none; }
+.finanzas-notas { font-size: 0.8rem; color: var(--text-muted); margin: 10px 4px 20px; line-height: 1.5; }
