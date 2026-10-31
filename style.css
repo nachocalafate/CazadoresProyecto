@@ -236,3 +236,7 @@ body.modo-tv-activo .pedana-stats .texto-chico { font-size: 1.5rem; }
 .btn-juez-error { background-color: #7a1d24; border: 3px solid #5c161b; }
 .btn-juez-error:hover { background-color: #65171d; }
 .plato-actual { border: 2px solid var(--accent-yellow) !important; box-shadow: 0 0 10px var(--accent-yellow); transform: scale(1.15); }
+
+/* Cartel TIRANDO */
+.badge-tirando { background-color: #FF8C00; color: black; font-size: 0.65rem; font-weight: 900; padding: 3px 6px; border-radius: 3px; margin-left: 6px; vertical-align: middle; display: inline-block; letter-spacing: 0.5px; animation: titilarLive 1.5s infinite; box-shadow: 0 0 8px rgba(255, 140, 0, 0.6); }
+body.modo-tv-activo .badge-tirando { font-size: 0.85rem; padding: 4px 8px; }

@@ -18,6 +18,7 @@ let filtroCategoria = 'Todas';
 let filtroBusqueda = '';
 let modoVistaTV = 'resultados'; 
 let modoTvActivo = false;
+let actividadTirador = {}; // id inscripción -> última vez que un juez lo puntuó (para modo sin límite)
 
 const canalRealtime = clienteSupabase.channel('sala-sincronizacion');
 
@@ -271,7 +272,7 @@ window.toggleModoTV = function() {
 window.cambiarModoTV = function(modo, btn) { modoVistaTV = modo; document.querySelectorAll('.tab-btn-tv').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.modo-tv-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); }); document.getElementById(`contenedor-modo-${modo}`).style.display = 'block'; document.getElementById(`contenedor-modo-${modo}`).classList.add('active'); if (torneoTV) cargarResultados(torneoTV.id); }
 
 let frameScrollTV = null;
-function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.25; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
+function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.07; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
 function detenerScrollAutoTV() { if (frameScrollTV) cancelAnimationFrame(frameScrollTV); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.scrollReal = 0; c.dataset.pausa = "false"; }); }
 
 function renderizarBotonesTorneosAdmin() { const div = document.getElementById('botones-torneos'); if (!div) return; div.innerHTML = ''; listaTorneos.forEach(t => { div.innerHTML += `<button class="btn-torneo ${torneoAdmin && torneoAdmin.id === t.id ? 'admin-selected' : ''}" onclick="seleccionarTorneoAdmin('${t.id}')">${t.nombre}</button>`; }); }
@@ -339,6 +340,13 @@ function renderizarFiltrosCategorias(containerId, torneoConfig) { const cont = d
 function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria', 'edit-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
 window.setFiltroCategoria = function(cat) { filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV; if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); } }
 window.setFiltroBusqueda = function(txt) { filtroBusqueda = txt.toLowerCase(); if(esAdmin) cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
+// Un tirador está "tirando" si ya empezó su serie y todavía no la completó.
+// En modo sin límite no hay fin definido: se considera tirando si un juez lo puntuó en los últimos 2 minutos.
+function estaTirando(row, torneoConfig, maxCols) {
+    if (row.ausente) return false;
+    if (torneoConfig.modo_sin_limite) { const ts = actividadTirador[row.id]; return !!ts && (Date.now() - ts) < 120000; }
+    return row.totalTirados > 0 && row.totalTirados < maxCols;
+}
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
 
 function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
@@ -380,10 +388,11 @@ function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
             let barrageTxt = row.barrage > 0 && !row.ausente ? `<span style="color:var(--accent-yellow); font-weight:900;">${row.barrage}</span>` : '-';
             let enSerieCond = torneoConfig.modo_sin_limite ? (row.totalAciertos > 0 && row.totalAciertos === row.totalTirados) : (row.totalAciertos === maxCols && maxCols > 0);
             let badgeSerie = enSerieCond && !row.ausente ? `<span class="badge-serie">EN SERIE</span>` : '';
+            let badgeTirando = estaTirando(row, torneoConfig, maxCols) ? `<span class="badge-tirando">TIRANDO</span>` : '';
             let ausenteBadge = row.ausente ? `<span style="background:var(--danger); color:white; font-size:0.65rem; padding:2px 6px; border-radius:3px; margin-left:8px; font-weight:bold;">AUSENTE</span>` : '';
             let catClass = row.categoria.toLowerCase().includes('vet') ? 'supervet' : (row.categoria.toLowerCase().includes('junior') ? 'junior' : (row.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
             
-            html += `<tr style="${row.ausente ? 'opacity: 0.35;' : ''}"><td style="width:${wPos}; color: white; font-weight: bold; background-color: #050505; text-align:center;">${row.posicionFija}</td><td style="width:${wNum}; text-align:center; font-weight: normal; color: #AAA;">${row.orden}</td><td style="width:${wTirador}; text-align: left; padding-left:15px; font-weight:bold; white-space:nowrap; overflow:hidden; color:white;" title="${row.tirador}">${formatearNombre(row.tirador)} ${badgeSerie} ${ausenteBadge}</td><td style="width:${wCat}; font-size: 0.85rem; text-align:center;"><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td>${htmlPlatosMultiTD}<td style="width:${wTot}; font-size: 1.3rem; font-weight: bold; text-align:center; color:white;">${row.ausente ? '-' : row.totalAciertos}</td><td style="width:${wBar}; font-size: 1.2rem; font-weight: bold; text-align:center;">${barrageTxt}</td><td style="width:${wFin}; font-size: 1.6rem; font-weight: bold; color: white; text-align:center;">${row.ausente ? '-' : row.puntajeFinal}</td></tr>`;
+            html += `<tr style="${row.ausente ? 'opacity: 0.35;' : ''}"><td style="width:${wPos}; color: white; font-weight: bold; background-color: #050505; text-align:center;">${row.posicionFija}</td><td style="width:${wNum}; text-align:center; font-weight: normal; color: #AAA;">${row.orden}</td><td style="width:${wTirador}; text-align: left; padding-left:15px; font-weight:bold; white-space:nowrap; overflow:hidden; color:white;" title="${row.tirador}">${formatearNombre(row.tirador)} ${badgeSerie} ${badgeTirando} ${ausenteBadge}</td><td style="width:${wCat}; font-size: 0.85rem; text-align:center;"><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td>${htmlPlatosMultiTD}<td style="width:${wTot}; font-size: 1.3rem; font-weight: bold; text-align:center; color:white;">${row.ausente ? '-' : row.totalAciertos}</td><td style="width:${wBar}; font-size: 1.2rem; font-weight: bold; text-align:center;">${barrageTxt}</td><td style="width:${wFin}; font-size: 1.6rem; font-weight: bold; color: white; text-align:center;">${row.ausente ? '-' : row.puntajeFinal}</td></tr>`;
         });
         return html;
     }
@@ -446,6 +455,52 @@ function ganadoresDeCategoria(cat) {
 }
 function htmlGanadoresPorCategoria() { let html = '<div class="winners-grid">'; obtenerCategorias(torneoAdmin).forEach(cat => { const g = ganadoresDeCategoria(cat); if (!g) { html += `<div class="winner-box vacio"><h4>${cat.toUpperCase()}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Sin tiradores</div></div>`; return; } const estado = g.provisorio ? '<span class="winner-estado prov">PROVISORIO</span>' : '<span class="winner-estado fin">FINAL</span>'; if (g.ganadores.length === 0) { html += `<div class="winner-box"><h4>${cat.toUpperCase()} ${estado}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Aún sin resultados</div></div>`; return; } const nombres = g.ganadores.map(t => `<div class="winner-name">${t.tirador} <span class="winner-orden">Nº ${t.orden}</span></div>`).join(''); html += `<div class="winner-box ${g.empate ? 'empate' : 'unico'}"><h4>${cat.toUpperCase()} ${estado}</h4>${g.empate ? `<div class="winner-tag">EMPATE</div>` : ''}${nombres}<div class="winner-pts">${g.ganadores[0].totalAciertos} ${torneoAdmin.modo_sin_limite?'aciertos':`de ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)}`}${g.ganadores[0].barrage > 0 ? ` (barrage ${g.ganadores[0].barrage})` : ''}</div></div>`; }); return html + '</div>'; }
 
+function htmlStatsObjetivos(presentes) {
+    const sinLim = torneoAdmin.modo_sin_limite; const porRonda = torneoAdmin.platos_por_serie; const vueltas = torneoAdmin.vueltas || 1;
+    const datos = {};
+    presentes.forEach(t => t.resultados.forEach((r, i) => {
+        if (r === null || r === undefined) return;
+        const n = (sinLim || !porRonda) ? i + 1 : (i % porRonda) + 1;
+        if (!datos[n]) datos[n] = { t: 0, h: 0 };
+        datos[n].t++; if (r === 1) datos[n].h++;
+    }));
+    const nums = Object.keys(datos).map(Number).sort((a, b) => a - b);
+    const titulo = '<h2 class="titulo-amarillo">ACIERTO POR OBJETIVO</h2>';
+    if (nums.length === 0) return titulo + '<p style="color:var(--text-muted);">Todavía no hay objetivos tirados.</p>';
+
+    const pct = n => Number((datos[n].h / datos[n].t * 100).toFixed(2));
+    const maxP = Math.max(...nums.map(pct)), minP = Math.min(...nums.map(pct));
+    const iguales = maxP === minP;
+    const mejores = nums.filter(n => pct(n) === maxP), peores = nums.filter(n => pct(n) === minP);
+    const fmt = arr => arr.length === 1 ? `Objetivo ${arr[0]}` : `Objetivos ${arr.slice(0, -1).join(', ')} y ${arr[arr.length - 1]}`;
+    const detalle = n => `${pct(n).toFixed(1)}% (${datos[n].h} de ${datos[n].t})`;
+
+    let cajas = '';
+    if (!iguales) {
+        cajas = `<div class="stats-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="stat-box" style="border-top-color: var(--accent-yellow);"><h4>MÁS ACERTADO</h4><div class="val" style="font-size:1.8rem;">${fmt(mejores)}</div><div class="sub">${detalle(mejores[0])}</div></div>
+            <div class="stat-box" style="border-top-color: var(--danger);"><h4>MÁS ERRADO</h4><div class="val" style="font-size:1.8rem;">${fmt(peores)}</div><div class="sub">${detalle(peores[0])}</div></div></div>`;
+    }
+
+    const altoMax = 180;
+    const barras = nums.map(n => {
+        const p = pct(n); const color = iguales ? '#198754' : (p === maxP ? 'var(--accent-yellow)' : (p === minP ? 'var(--danger)' : '#198754'));
+        return `<div style="flex: 1; min-width: 44px; display: flex; flex-direction: column; align-items: center;" title="Objetivo ${n}: ${detalle(n)}">
+            <div style="height: ${altoMax + 22}px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; width: 100%;">
+                <div style="font-size: 0.8rem; font-weight: bold; color: white; margin-bottom: 4px;">${Math.round(p)}%</div>
+                <div style="width: 100%; max-width: 56px; height: ${Math.max(2, Math.round(p * altoMax / 100))}px; background-color: ${color}; border-radius: 4px 4px 0 0;"></div>
+            </div>
+            <div style="border-top: 1px solid var(--border); width: 100%; text-align: center; padding-top: 6px; font-weight: bold; color: white; font-size: 0.9rem;">${n}</div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">${datos[n].h}/${datos[n].t}</div></div>`;
+    }).join('');
+
+    const nota = (!sinLim && vueltas > 1) ? `Cada objetivo suma los resultados de las ${vueltas} rondas.` : '';
+    const leyenda = iguales ? 'Todos los objetivos tienen el mismo porcentaje de acierto.' : '<span style="color:var(--accent-yellow);">■</span> más acertado &nbsp; <span style="color:var(--danger);">■</span> más errado';
+    return `${titulo}${cajas}<div style="background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+        <div style="display:flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; font-size: 0.85rem; color: var(--text-muted);"><span>% de acierto por número de objetivo ${nota}</span><span>${leyenda}</span></div>
+        <div style="display: flex; align-items: flex-end; gap: 8px; overflow-x: auto;">${barras}</div></div>`;
+}
+
 function renderizarStats() {
     const cont = document.getElementById('contenedor-stats'); if (!cont || !torneoAdmin) return; if (tiradoresLocales.length === 0) { cont.innerHTML = '<p>No hay datos.</p>'; return; }
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
@@ -454,7 +509,7 @@ function renderizarStats() {
     presentes.forEach(t => { if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++; else catsCount[t.categoria] = 1; let subtotal = (costos[t.categoria] || 0); let pins = t.paralelos_inscriptos || []; paralelos.forEach(p => { if(pins.includes(p.nombre)) subtotal += p.costo; }); recaudado += subtotal; t.resultados.forEach(r => { if(r !== null && r !== undefined) { tirados++; if(r===1) pegados++; else errados++; } }); });
     let premios = Math.max(0, recaudado - (tirados * (costos["Objetivo"] || 1000)) - ((recaudado * (costos["Retencion"] || 10)) / 100));
     let htmlCatsGrid = ''; catsList.forEach(c => { htmlCatsGrid += `<div class="stat-box"><h4>${c.toUpperCase()}</h4><div class="val">${catsCount[c] || 0}</div></div>`; });
-    cont.innerHTML = `<h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div><div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${torneoAdmin.modo_sin_limite?'Sin límite':`${totTiradores} pres. x ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)} platos`}</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${torneoAdmin.modo_sin_limite?'-':(totObjetivos - tirados)} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div><h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div><h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}<h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div><div class="sub">Inscripciones + Paralelos</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>`;
+    cont.innerHTML = `<h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div><div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${torneoAdmin.modo_sin_limite?'Sin límite':`${totTiradores} pres. x ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)} platos`}</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${torneoAdmin.modo_sin_limite?'-':(totObjetivos - tirados)} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div>${htmlStatsObjetivos(presentes)}<h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div><h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}<h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div><div class="sub">Inscripciones + Paralelos</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>`;
 }
 
 function cargarFormularioCostos() {
@@ -495,8 +550,8 @@ window.renderizarAdminJueces = function() {
 }
 
 window.cambiarGrupoJueces = function() { grupoJuecesActivo = document.getElementById('select-grupo-jueces').value; tiradorJuezActivoId = null; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); }
-window.seleccionarTiradorJuez = function(id) { tiradorJuezActivoId = id; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); sincronizarPedanaConJuez(id); }
-window.cambiarTiradorJuez = function(delta) {
+window.seleccionarTiradorJuez = function(id) { tiradorJuezActivoId = id; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); }
+window.cambiarTiradorJuez = function(delta, llamar = false) {
     let listaBase = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
     if (torneoAdmin.disciplina === 'Plato' && grupoJuecesActivo !== 'Todos') {
         let grupos = getGruposPlato(); let gIdx = parseInt(grupoJuecesActivo);
@@ -505,7 +560,7 @@ window.cambiarTiradorJuez = function(delta) {
         if (listaBase.length === 0) return; let i = listaBase.findIndex(x => x.id === tiradorJuezActivoId); if (i === -1) i = 0; tiradorJuezActivoId = listaBase[Math.max(0, Math.min(listaBase.length - 1, i + delta))].id;
     }
     juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); 
-    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); if (activo) activo.scrollIntoView({ block: 'nearest' }); sincronizarPedanaConJuez(tiradorJuezActivoId);
+    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); if (activo) activo.scrollIntoView({ block: 'nearest' }); if (llamar) sincronizarPedanaConJuez(tiradorJuezActivoId);
 }
 
 window.seleccionarVueltaJuez = function(v) { vueltaJuezActiva = v; juezPlatoSeleccionadoIdx = null; renderizarPanelDerechoJuez(); }
@@ -573,7 +628,7 @@ function renderizarPanelDerechoJuez() {
     
     let serieTxt = isSinLimite ? `TIRADOS: ${t.totalTirados} | ACIERTOS: ${t.totalAciertos}` : `SERIE ${t.totalTirados === (limitRonda * totalVueltas) ? 'COMPLETA' : 'EN CURSO'}: ${t.totalTirados} DE ${limitRonda * totalVueltas} (Aciertos: ${t.totalAciertos})`;
 
-    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="font-size: 1rem; padding: 10px 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="font-size: 1rem; padding: 10px 20px; background-color: var(--accent); color: white; font-weight: bold; border: none;">${btnRotativoTxt}</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.3rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 15px;">${serieTxt}</div>${htmlRondas}<div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-top: 5px;">${htmlPlatos}${botonesGrandes}</div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}"><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
+    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="font-size: 1rem; padding: 10px 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="font-size: 1rem; padding: 10px 20px; background-color: var(--accent); color: white; font-weight: bold; border: none;" title="Cambia de tirador solo en esta pantalla de juez">${btnRotativoTxt}</button><button onclick="cambiarTiradorJuez(1, true)" style="font-size: 1rem; padding: 10px 20px; background-color: #D97706; color: white; font-weight: bold; border: none;" title="Pasa al siguiente y además lo llama en 'Ver tirador en pedana'">📢 Siguiente y llamar</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.3rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 15px;">${serieTxt}</div>${htmlRondas}<div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-top: 5px;">${htmlPlatos}${botonesGrandes}</div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}"><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
 }
 
 window.marcarPlatoRapido = async function(idRow, idx, valor) {
@@ -594,7 +649,8 @@ window.marcarPlatoRapido = async function(idRow, idx, valor) {
     
     t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
     renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
-    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
+    actividadTirador[idRow] = Date.now();
+    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV({ tiradorId: idRow });
 }
 
 window.toggleAusente = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.ausente = !t.ausente; await clienteSupabase.from('inscripciones').update({ ausente: t.ausente }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarStats(); renderizarAdminBaseDatosTorneo(); avisarALaTV(); } }
@@ -623,7 +679,7 @@ window.exportarExcel = function() {
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), "Resultados"); XLSX.writeFile(wb, `Resultados_${torneoAdmin.nombre.replace(/ /g, '_')}.xlsx`);
 }
 
-function avisarALaTV() { canalRealtime.send({ type: 'broadcast', event: 'recargar_pantallas', payload: {} }); }
+function avisarALaTV(payload = {}) { canalRealtime.send({ type: 'broadcast', event: 'recargar_pantallas', payload }); }
 window.abrirModalEditar = function(id, nom, ord, cat) { document.getElementById('edit-id').value = id; document.getElementById('edit-tirador').value = nom; document.getElementById('edit-orden').value = ord; document.getElementById('edit-categoria').value = cat; document.getElementById('modal-editar').style.display = 'flex'; }
 window.cerrarModalEditar = () => document.getElementById('modal-editar').style.display = 'none';
 window.guardarEdicionTirador = async function() { let nuevoOrden = parseInt(document.getElementById('edit-orden').value); let idActual = document.getElementById('edit-id').value; if (tiradoresLocales.some(t => t.orden === nuevoOrden && t.id !== idActual)) return mostrarAlerta(`El Nº ${nuevoOrden} ya está asignado.`); await clienteSupabase.from('inscripciones').update({ tirador: document.getElementById('edit-tirador').value, orden: nuevoOrden, categoria: document.getElementById('edit-categoria').value }).eq('id', idActual); cerrarModalEditar(); await cargarResultados(torneoAdmin.id); avisarALaTV(); }
@@ -669,5 +725,7 @@ window.editarTorneoActual = async function() {
 
 window.eliminarTorneoActual = function() { mostrarConfirmacion("¿ELIMINAR torneo completo y TODOS sus tiradores?", async () => { await clienteSupabase.from('inscripciones').delete().eq('torneo_id', torneoAdmin.id); await clienteSupabase.from('torneos').delete().eq('id', torneoAdmin.id); torneoAdmin = null; await inicializarDatos(); avisarALaTV(); }); }
 
-canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async () => { if (!esAdmin) { if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos(); } }).subscribe();
+canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async (msg) => { if (!esAdmin) { const tid = msg && msg.payload && msg.payload.tiradorId; if (tid) actividadTirador[tid] = Date.now(); if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos(); } }).subscribe();
+// En modo sin límite, refresca para que el cartel TIRANDO se apague solo al pasar la inactividad
+setInterval(() => { if (!esAdmin && torneoTV && torneoTV.modo_sin_limite) cargarResultados(torneoTV.id); }, 30000);
 document.addEventListener('DOMContentLoaded', verificarSesion);
