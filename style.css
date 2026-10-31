@@ -74,6 +74,11 @@ button:hover { background-color: var(--accent-hover); }
 .tag-categoria.junior { border-color: #B45309; }
 .tag-categoria.principiante { border-color: #D97706; }
 
+/* ESTILOS PARA PARALELOS */
+.tag-paralelo { background-color: transparent; border: 1px solid #555; color: #888; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-block; margin-right: 4px; }
+.tag-paralelo:hover { border-color: white; color: white; }
+.tag-paralelo.active { background-color: var(--success); border-color: var(--success); color: white; }
+
 .tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
 .tab-btn { background: none; color: var(--text-muted); padding: 12px 25px; border-radius: 0; font-size: 0.95rem; font-weight: bold; border-bottom: 3px solid transparent; }
 .tab-btn.active { color: white; border-bottom: 3px solid var(--accent); background: transparent; }
@@ -118,19 +123,9 @@ body.modo-tv-activo .tabs-tv { display: none !important; }
 body.modo-tv-activo .resultados-header { padding: 4px 12px; }
 body.modo-tv-activo .cat-filters { margin-bottom: 4px; padding: 4px 12px; }
 
-body.modo-tv-activo .container { 
-    padding: 15px 30px 30px 30px; 
-    height: calc(100vh - 75px); 
-    box-sizing: border-box; 
-    max-width: 100%; 
-}
+body.modo-tv-activo .container { padding: 15px 30px 30px 30px; height: calc(100vh - 75px); box-sizing: border-box; max-width: 100%; }
 
-body.modo-tv-activo .table-container { 
-    height: calc(100vh - 130px); 
-    max-height: none; 
-    display: flex; flex-direction: column; overflow: hidden; 
-    border: none; background: transparent; box-shadow: none;
-}
+body.modo-tv-activo .table-container { height: calc(100vh - 130px); max-height: none; display: flex; flex-direction: column; overflow: hidden; border: none; background: transparent; box-shadow: none; }
 body.modo-tv-activo table { display: flex; flex-direction: column; height: 100%; width: 100%; table-layout: fixed; }
 body.modo-tv-activo thead,
 body.modo-tv-activo .tbody-enserie tr,
@@ -141,7 +136,6 @@ body.modo-tv-activo .tbody-enserie { display: block; flex-shrink: 0; }
 body.modo-tv-activo .tbody-resto-header { display: block; flex-shrink: 0; }
 body.modo-tv-activo .tbody-resto { display: block; overflow-y: scroll; overflow-x: hidden; width: 100%; flex-grow: 1; height: 0; }
 
-/* NUEVOS SEPARADORES EN BLOQUE */
 .tr-separador td { background-color: transparent !important; text-align: left !important; padding: 12px 15px 8px 15px !important; border: none !important; }
 .separador-box { background-color: var(--accent-yellow); color: black; font-weight: 900; font-size: 1.1rem; padding: 6px 20px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
 
@@ -173,9 +167,7 @@ body.modo-tv-activo .split-right .pedana-stats .numero-grande { font-size: 3.5re
 body.modo-tv-activo .split-right .pedana-plate { width: 30px; height: 30px; font-size: 1.1rem; }
 
 body.modo-tv-activo .split-right .pedana-next-grid { grid-template-columns: 1fr; gap: 8px; }
-body.modo-tv-activo .split-right .pedana-next-box { 
-    display: flex; align-items: center; justify-content: flex-start; gap: 15px; padding: 10px 15px; text-align: left; background-color: #050505; border: 1px solid #1F1F1F;
-}
+body.modo-tv-activo .split-right .pedana-next-box { display: flex; align-items: center; justify-content: flex-start; gap: 15px; padding: 10px 15px; text-align: left; background-color: #050505; border: 1px solid #1F1F1F; }
 body.modo-tv-activo .split-right .pedana-next-orden { font-size: 2.2rem; color: white; line-height: 1; margin: 0; min-width: 35px; text-align: center; }
 body.modo-tv-activo .split-right .pedana-next-nombre { font-size: 1.5rem; margin: 0; flex-grow: 1; color: white; }
 
@@ -208,7 +200,7 @@ body.modo-tv-activo .split-right .pedana-next-nombre { font-size: 1.5rem; margin
 .winner-estado.fin { background-color: var(--success); color: white; }
 .winner-estado.prov { background-color: #3B82F6; color: white; }
 
-/* Pedana Sola (Estilo Cazadores Elegante) */
+/* Pedana Sola */
 .pedana-container { text-align: center; margin: 15px auto; max-width: 950px; }
 .pedana-main { background-color: var(--accent); border-radius: 8px; padding: 50px 20px 35px; position: relative; margin-bottom: 40px; border-top: 4px solid white; box-shadow: 0 15px 30px rgba(0,0,0,0.8); }
 .pedana-lbl { background-color: var(--accent-yellow); color: black; font-weight: 900; padding: 8px 25px; border-radius: 4px; font-size: 1.2rem; position: absolute; top: -20px; left: 50%; transform: translateX(-50%); letter-spacing: 1px; }
@@ -231,35 +223,16 @@ body.modo-tv-activo .pedana-nombre { font-size: 4.5rem; }
 body.modo-tv-activo .pedana-stats .numero-grande { font-size: 5.5rem; }
 body.modo-tv-activo .pedana-stats .texto-chico { font-size: 1.5rem; }
 
-/* Buscador público */
-.buscador-publico {
-    width: 100%;
-    max-width: 350px;
-    padding: 10px 15px;
-    border-radius: 6px;
-    border: 1px solid #333;
-    background-color: #111;
-    color: white;
-    font-size: 1rem;
-}
-
 /* Cartel EN CURSO */
-.badge-en-curso {
-    background-color: #E60000;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-weight: 900;
-    font-size: 0.75rem;
-    margin-left: 10px;
-    display: inline-block;
-    vertical-align: middle;
-    animation: titilarLive 1.5s infinite;
-    box-shadow: 0 0 8px rgba(230, 0, 0, 0.6);
-}
+.badge-en-curso { background-color: #E60000; color: white; padding: 4px 8px; border-radius: 4px; font-weight: 900; font-size: 0.75rem; margin-left: 10px; display: inline-block; vertical-align: middle; animation: titilarLive 1.5s infinite; box-shadow: 0 0 8px rgba(230, 0, 0, 0.6); }
+@keyframes titilarLive { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
 
-@keyframes titilarLive {
-    0% { opacity: 1; }
-    50% { opacity: 0.4; }
-    100% { opacity: 1; }
-}
+/* Botones Jueces */
+.panel-juez-botones { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+.btn-juez-grande { border: none; border-radius: 8px; padding: 25px 10px; color: white; font-size: 1.4rem; font-weight: 900; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.4); transition: transform 0.1s, filter 0.1s; letter-spacing: 1px; }
+.btn-juez-grande:active { transform: scale(0.95); }
+.btn-juez-acierto { background-color: #198754; border: 3px solid #146c43; }
+.btn-juez-acierto:hover { background-color: #157347; }
+.btn-juez-error { background-color: #7a1d24; border: 3px solid #5c161b; }
+.btn-juez-error:hover { background-color: #65171d; }
+.plato-actual { border: 2px solid var(--accent-yellow) !important; box-shadow: 0 0 10px var(--accent-yellow); transform: scale(1.15); }

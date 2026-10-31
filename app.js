@@ -1,4 +1,4 @@
-// ACÁ PONÉ TUS CREDENCIALES REALES
+// ACÁ PONÉ TUS CREDENCIALES
 const SUPABASE_URL = 'https://nhfruepiiweznuapwfve.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_VYJepoCDxfA-PVvK51Wykw_b6ZAB7jO';
 
@@ -8,8 +8,11 @@ let torneoTV = null;
 let torneoAdmin = null;   
 let listaTorneos = [];
 let tiradoresLocales = [];
+let tiradoresMaster = []; 
 let tiradorJuezActivoId = null;
 let grupoJuecesActivo = 'Todos';
+let juezPlatoSeleccionadoIdx = null;
+let vueltaJuezActiva = 1; // Para saber en qué ronda/vuelta está el juez
 
 let filtroCategoria = 'Todas';
 let filtroBusqueda = '';
@@ -18,13 +21,10 @@ let modoTvActivo = false;
 
 const canalRealtime = clienteSupabase.channel('sala-sincronizacion');
 
-// RELOJ Y FECHA DINÁMICA
 setInterval(() => { 
     const ahora = new Date();
-    
     const elReloj = document.getElementById('reloj'); 
     if (elReloj) elReloj.innerText = ahora.toLocaleTimeString('es-AR'); 
-    
     const elFecha = document.getElementById('fecha-top');
     if (elFecha) {
         let opciones = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -35,41 +35,24 @@ setInterval(() => {
 
 document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && modoTvActivo) {
-        document.getElementById('check-modo-tv').checked = false;
-        modoTvActivo = false;
-        document.getElementById('body-app').classList.remove('modo-tv-activo');
-        detenerScrollAutoTV();
+        document.getElementById('check-modo-tv').checked = false; modoTvActivo = false;
+        document.getElementById('body-app').classList.remove('modo-tv-activo'); detenerScrollAutoTV();
         if (torneoTV) cargarResultados(torneoTV.id);
     }
 });
 
-// ==========================================
-// MODALES GLOBALES
-// ==========================================
 window.mostrarAlerta = function(msg) { document.getElementById('alerta-mensaje').innerText = msg; document.getElementById('modal-alerta').style.display = 'flex'; }
 window.cerrarAlerta = function() { document.getElementById('modal-alerta').style.display = 'none'; }
-window.mostrarConfirmacion = function(msg, onConfirm) {
-    document.getElementById('confirm-mensaje').innerText = msg; document.getElementById('modal-confirm').style.display = 'flex';
-    document.getElementById('btn-confirm-ok').onclick = function() { document.getElementById('modal-confirm').style.display = 'none'; onConfirm(); };
-}
+window.mostrarConfirmacion = function(msg, onConfirm) { document.getElementById('confirm-mensaje').innerText = msg; document.getElementById('modal-confirm').style.display = 'flex'; document.getElementById('btn-confirm-ok').onclick = function() { document.getElementById('modal-confirm').style.display = 'none'; onConfirm(); }; }
 window.cerrarConfirmacion = function() { document.getElementById('modal-confirm').style.display = 'none'; }
 
-// ==========================================
-// SESIONES Y DATOS
-// ==========================================
 async function verificarSesion() {
     const { data: { session } } = await clienteSupabase.auth.getSession();
-    if (esAdmin) {
-        if (!session) window.location.href = 'index.html'; 
-        else { document.getElementById('admin-body').style.display = 'block'; inicializarDatos(); }
-    } else inicializarDatos(); 
+    if (esAdmin) { if (!session) window.location.href = 'index.html'; else { document.getElementById('admin-body').style.display = 'block'; inicializarDatos(); } } else inicializarDatos(); 
 }
 window.abrirModalLogin = () => document.getElementById('modal-login').style.display = 'flex';
 window.cerrarModalLogin = () => { document.getElementById('modal-login').style.display = 'none'; document.getElementById('login-error').style.display = 'none'; }
-window.iniciarSesion = async function() {
-    const { error } = await clienteSupabase.auth.signInWithPassword({ email: document.getElementById('login-email').value, password: document.getElementById('login-pass').value });
-    if (error) document.getElementById('login-error').style.display = 'block'; else window.location.href = 'admin.html';
-}
+window.iniciarSesion = async function() { const { error } = await clienteSupabase.auth.signInWithPassword({ email: document.getElementById('login-email').value, password: document.getElementById('login-pass').value }); if (error) document.getElementById('login-error').style.display = 'block'; else window.location.href = 'admin.html'; }
 window.cerrarSesion = async function() { await clienteSupabase.auth.signOut(); window.location.href = 'index.html'; }
 
 async function inicializarDatos() {
@@ -78,6 +61,7 @@ async function inicializarDatos() {
     listaTorneos = torneos || [];
     
     if (esAdmin) {
+        await cargarMasterDB(); 
         renderizarBotonesTorneosAdmin();
         if (!torneoAdmin && listaTorneos.length > 0) seleccionarTorneoAdmin(listaTorneos[0].id);
         else if (torneoAdmin) seleccionarTorneoAdmin(torneoAdmin.id);
@@ -87,9 +71,44 @@ async function inicializarDatos() {
     }
 }
 
-// ==========================================
-// DISCIPLINA Y TAMAÑOS DINÁMICOS
-// ==========================================
+async function cargarMasterDB() { const { data } = await clienteSupabase.from('tiradores').select('*').order('nombre'); tiradoresMaster = data || []; renderizarMaster(); }
+
+window.renderizarMaster = function() {
+    const tbody = document.getElementById('tbody-master'); if (!tbody) return;
+    const filtro = document.getElementById('buscador-master').value.toLowerCase();
+    let filtrados = tiradoresMaster.filter(t => t.nombre.toLowerCase().includes(filtro));
+    tbody.innerHTML = '';
+    if (filtrados.length === 0) { tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; padding: 20px; color:var(--text-muted);">No se encontraron tiradores.</td></tr>'; return; }
+    filtrados.forEach(t => {
+        let catClass = t.categoria.toLowerCase().includes('vet') ? 'supervet' : (t.categoria.toLowerCase().includes('junior') ? 'junior' : (t.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
+        tbody.innerHTML += `<tr><td style="font-weight: bold; text-transform: uppercase;">${t.nombre}</td><td><span class="tag-categoria ${catClass}">${t.categoria.toUpperCase()}</span></td><td><button class="btn-outline" style="border-color: var(--success); color: var(--success); margin-right: 5px;" onclick="agregarDesdeMaster('${t.nombre}', '${t.categoria}')">+ Agregar al Torneo</button><button class="btn-outline" onclick="abrirModalEditarMaster('${t.id}', '${t.nombre}', '${t.categoria}')">Editar</button></td></tr>`;
+    });
+}
+window.guardarTiradorMaster = async function() {
+    let nom = document.getElementById('input-master-nombre').value.trim(); let cat = document.getElementById('input-master-categoria').value;
+    if(!nom) return mostrarAlerta("Debe ingresar un nombre.");
+    if (tiradoresMaster.some(t => t.nombre.toLowerCase() === nom.toLowerCase())) return mostrarAlerta("Este tirador ya existe en la Base de Datos Histórica.");
+    await clienteSupabase.from('tiradores').insert([{ nombre: nom, categoria: cat }]);
+    document.getElementById('input-master-nombre').value = ''; await cargarMasterDB(); mostrarAlerta("Tirador guardado en la base de datos.");
+}
+window.agregarDesdeMaster = async function(nombre, categoria) {
+    if (!torneoAdmin) return mostrarAlerta("Debes seleccionar un torneo primero.");
+    let orden = prompt(`Ingresá el Nº de Orden (Turno) para agregar a ${nombre.toUpperCase()}:`); if (!orden) return; 
+    orden = parseInt(orden); if (isNaN(orden) || orden <= 0) return mostrarAlerta("Nº de orden inválido.");
+    if (tiradoresLocales.some(t => t.orden === orden)) return mostrarAlerta(`El Nº ${orden} ya está ocupado.`);
+    
+    let resInicial = torneoAdmin.modo_sin_limite ? [] : Array(torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)).fill(null);
+    await clienteSupabase.from('inscripciones').insert([{ torneo_id: torneoAdmin.id, orden: orden, tirador: nombre, categoria: categoria, resultados: resInicial, barrage: 0, ausente: false, paralelos_inscriptos: [] }]);
+    await cargarResultados(torneoAdmin.id); avisarALaTV(); abrirPestana('tab-torneos', document.querySelector('.tab-btn:last-child')); mostrarAlerta(`¡Agregado exitosamente con el Nº ${orden}!`);
+}
+window.abrirModalEditarMaster = function(id, nombre, categoria) { document.getElementById('edit-master-id').value = id; document.getElementById('edit-master-nombre').value = nombre; document.getElementById('edit-master-categoria').value = categoria; document.getElementById('modal-editar-master').style.display = 'flex'; }
+window.cerrarModalEditarMaster = () => document.getElementById('modal-editar-master').style.display = 'none';
+window.guardarEdicionMaster = async function() {
+    let id = document.getElementById('edit-master-id').value; let nom = document.getElementById('edit-master-nombre').value.trim(); let cat = document.getElementById('edit-master-categoria').value;
+    if(!nom) return mostrarAlerta("El nombre no puede estar vacío.");
+    await clienteSupabase.from('tiradores').update({ nombre: nom, categoria: cat }).eq('id', id); cerrarModalEditarMaster(); await cargarMasterDB();
+}
+
 window.cambiarDisciplinaUi = function(prefijo) {
     const disc = document.getElementById(`${prefijo}-disciplina`).value;
     const selectPlatos = document.getElementById(`${prefijo}-platos`);
@@ -104,370 +123,232 @@ window.cambiarDisciplinaUi = function(prefijo) {
         [10, 15, 20, 25, 30].forEach(v => selectPlatos.innerHTML += `<option value="${v}">${v} Platos</option>`);
     }
     selectPlatos.innerHTML += `<option value="Personalizado">Personalizado</option>`;
-    
+    selectPlatos.innerHTML += `<option value="SinLímite">Modo SIN LÍMITE</option>`;
     cambiarPlatosPersonalizado(prefijo);
 }
-
 window.cambiarPlatosPersonalizado = function(prefijo) {
     const val = document.getElementById(`${prefijo}-platos`).value;
     document.getElementById(`${prefijo}-platos-custom`).style.display = (val === 'Personalizado') ? 'block' : 'none';
+    if(val === 'SinLímite') document.getElementById(`${prefijo}-vueltas`).value = 1; // Forzamos a 1 vuelta si es sin límite
 }
 
-// INICIO - BUSCADOR DE TORNEOS Y CARTEL EN CURSO
+// ==========================================
+// IMPORTAR EXCEL
+// ==========================================
+window.importarExcelDesdeArchivo = function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type: 'array'});
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, {defval: ""});
+
+        let agregados = 0;
+        for (let row of jsonData) {
+            // Mapeo flexible de columnas
+            let ordenStr = row['ORDEN'] || row['Nro'] || row['Orden'] || row['Nº'] || row['Nro Orden'] || row['Nro.'] || row['NRO'];
+            let nombreStr = row['TIRADOR'] || row['Nombre'] || row['Nombre y Apellido'] || row['Tirador'] || row['NOMBRE'];
+            let categoriaStr = row['CAT'] || row['Categoria'] || row['Categoría'] || row['CATEGORIA'] || 'Senior';
+
+            if (ordenStr !== "" && nombreStr !== "") {
+                let orden = parseInt(ordenStr);
+                if (!isNaN(orden) && !tiradoresLocales.some(t => t.orden === orden)) {
+                    let resultadosIniciales = torneoAdmin.modo_sin_limite ? [] : Array(torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)).fill(null);
+                    
+                    await clienteSupabase.from('inscripciones').insert([{
+                        torneo_id: torneoAdmin.id, orden: orden, tirador: nombreStr.toString().trim(), categoria: categoriaStr.toString().trim(),
+                        resultados: resultadosIniciales, barrage: 0, ausente: false, paralelos_inscriptos: []
+                    }]);
+                    agregados++;
+                    
+                    if (!tiradoresMaster.some(t => t.nombre.toLowerCase() === nombreStr.toString().trim().toLowerCase())) {
+                        await clienteSupabase.from('tiradores').insert([{ nombre: nombreStr.toString().trim(), categoria: categoriaStr.toString().trim() }]);
+                    }
+                }
+            }
+        }
+        
+        if (agregados > 0) {
+            await cargarResultados(torneoAdmin.id); await cargarMasterDB(); avisarALaTV();
+            mostrarAlerta(`Se importaron ${agregados} tiradores con éxito.`);
+        } else {
+            mostrarAlerta("No se pudo importar nada. Asegurate de que el Excel tenga las columnas ORDEN y TIRADOR.");
+        }
+        event.target.value = ""; 
+    };
+    reader.readAsArrayBuffer(file);
+}
+
 window.renderizarTarjetasInicio = function() {
-    const div = document.getElementById('grid-torneos-publicos');
-    const inputBuscador = document.getElementById('buscador-torneos-publico');
-    const filtro = inputBuscador ? inputBuscador.value.toLowerCase() : '';
-    
-    if (!div) return;
-    div.innerHTML = '';
-    
-    let filtrados = listaTorneos;
-    if (filtro !== '') {
-        filtrados = listaTorneos.filter(t => t.nombre.toLowerCase().includes(filtro));
-    }
-    
-    if (filtrados.length === 0) return div.innerHTML = '<p style="color:var(--text-muted); font-size:1.2rem;">No se encontraron torneos con ese nombre.</p>';
+    const div = document.getElementById('grid-torneos-publicos'); const inputBuscador = document.getElementById('buscador-torneos-publico'); const filtro = inputBuscador ? inputBuscador.value.toLowerCase() : '';
+    if (!div) return; div.innerHTML = '';
+    let filtrados = listaTorneos; if (filtro !== '') filtrados = listaTorneos.filter(t => t.nombre.toLowerCase().includes(filtro));
+    if (filtrados.length === 0) return div.innerHTML = '<p style="color:var(--text-muted); font-size:1.2rem;">No se encontraron torneos.</p>';
     
     filtrados.forEach(t => {
         let fechaFormat = t.fecha ? `<br><span style="font-size: 0.9rem; color: #888;">${t.fecha.split('-').reverse().join('/')}</span>` : '';
         let badgeLive = t.estado === 'En curso' ? '<span class="badge-en-curso">🔴 EN CURSO</span>' : '';
         let disciplinaStr = t.disciplina ? t.disciplina : 'Helice';
         let word = disciplinaStr === 'Plato' ? 'platos' : 'hélices';
+        let objStr = t.modo_sin_limite ? 'Modo Sin Límite' : `${(t.platos_por_serie || 12) * (t.vueltas || 1)} ${word} (${t.vueltas || 1} rondas)`;
         
-        div.innerHTML += `
-            <div class="card-publica" onclick="abrirVistaTV('${t.id}')">
-                <h3>${t.nombre} ${badgeLive} ${fechaFormat}</h3>
-                <p>• ${disciplinaStr} - ${t.platos_por_serie || 12} ${word}</p>
-            </div>`;
+        div.innerHTML += `<div class="card-publica" onclick="abrirVistaTV('${t.id}')"><h3>${t.nombre} ${badgeLive} ${fechaFormat}</h3><p>• ${disciplinaStr} - ${objStr}</p></div>`;
     });
 }
-
-window.abrirVistaTV = async function(id) {
-    document.getElementById('vista-inicio').style.display = 'none'; document.getElementById('vista-tv').style.display = 'block';
-    torneoTV = listaTorneos.find(t => t.id === id);
-    if (!torneoTV.platos_por_serie) torneoTV.platos_por_serie = 12;
-    document.getElementById('nombre-torneo').innerText = torneoTV.nombre;
-    filtroCategoria = 'Todas'; filtroBusqueda = ''; 
-    await cargarResultados(torneoTV.id);
-}
-window.volverAlInicio = function() {
-    document.getElementById('vista-tv').style.display = 'none'; document.getElementById('vista-inicio').style.display = 'block';
-    torneoTV = null; renderizarTarjetasInicio();
-}
-
+window.abrirVistaTV = async function(id) { document.getElementById('vista-inicio').style.display = 'none'; document.getElementById('vista-tv').style.display = 'block'; torneoTV = listaTorneos.find(t => t.id === id); if (!torneoTV.platos_por_serie) torneoTV.platos_por_serie = 12; document.getElementById('nombre-torneo').innerText = torneoTV.nombre; filtroCategoria = 'Todas'; filtroBusqueda = ''; await cargarResultados(torneoTV.id); }
+window.volverAlInicio = function() { document.getElementById('vista-tv').style.display = 'none'; document.getElementById('vista-inicio').style.display = 'block'; torneoTV = null; renderizarTarjetasInicio(); }
 window.toggleModoTV = function() {
-    modoTvActivo = document.getElementById('check-modo-tv').checked;
-    const bodyEl = document.getElementById('body-app');
-    
-    if (modoTvActivo) {
-        bodyEl.classList.add('modo-tv-activo');
-        let docEl = document.documentElement;
-        if (docEl.requestFullscreen) { docEl.requestFullscreen().catch(e => console.log(e)); }
-        else if (docEl.webkitRequestFullscreen) { docEl.webkitRequestFullscreen(); }
-        else if (docEl.msRequestFullscreen) { docEl.msRequestFullscreen(); }
-        iniciarScrollAutoTV();
-    } else {
-        bodyEl.classList.remove('modo-tv-activo');
-        detenerScrollAutoTV();
-        if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
-            if (document.exitFullscreen) { document.exitFullscreen().catch(e => console.log(e)); }
-            else if (document.webkitExitFullscreen) { document.webkitExitFullscreen(); }
-            else if (document.msExitFullscreen) { document.msExitFullscreen(); }
-        }
-    }
+    modoTvActivo = document.getElementById('check-modo-tv').checked; const bodyEl = document.getElementById('body-app');
+    if (modoTvActivo) { bodyEl.classList.add('modo-tv-activo'); let docEl = document.documentElement; if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e=>console.log(e)); else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen(); iniciarScrollAutoTV(); } 
+    else { bodyEl.classList.remove('modo-tv-activo'); detenerScrollAutoTV(); if (document.fullscreenElement || document.webkitFullscreenElement) { if (document.exitFullscreen) document.exitFullscreen().catch(e=>console.log(e)); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } }
     if (torneoTV) cargarResultados(torneoTV.id);
 }
+window.cambiarModoTV = function(modo, btn) { modoVistaTV = modo; document.querySelectorAll('.tab-btn-tv').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.modo-tv-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); }); document.getElementById(`contenedor-modo-${modo}`).style.display = 'block'; document.getElementById(`contenedor-modo-${modo}`).classList.add('active'); if (torneoTV) cargarResultados(torneoTV.id); }
 
-window.cambiarModoTV = function(modo, elementoBtn) {
-    modoVistaTV = modo;
-    document.querySelectorAll('.tab-btn-tv').forEach(b => b.classList.remove('active'));
-    elementoBtn.classList.add('active');
-    document.querySelectorAll('.modo-tv-pane').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
-
-    if (modo === 'resultados') {
-        const pane = document.getElementById('contenedor-modo-resultados');
-        pane.style.display = 'block'; pane.classList.add('active');
-    } else if (modo === 'pedana') {
-        const pane = document.getElementById('contenedor-modo-pedana');
-        pane.style.display = 'block'; pane.classList.add('active');
-    } else if (modo === 'dividido') {
-        const pane = document.getElementById('contenedor-modo-dividido');
-        pane.style.display = 'block'; pane.classList.add('active');
-    }
-    if (torneoTV) cargarResultados(torneoTV.id);
-}
-
-// ==========================================
-// LÓGICA DE AUTO-SCROLL
-// ==========================================
 let frameScrollTV = null;
-function iniciarScrollAutoTV() {
-    detenerScrollAutoTV();
-    document.querySelectorAll('.tbody-resto').forEach(c => {
-        c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0;
-        setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000);
-    });
+function iniciarScrollAutoTV() { detenerScrollAutoTV(); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.pausa = "true"; c.dataset.scrollReal = 0; c.scrollTop = 0; setTimeout(() => { if (modoTvActivo) c.dataset.pausa = "false"; }, 3000); }); function loopScroll() { if (!modoTvActivo) return; document.querySelectorAll('.tbody-resto').forEach(c => { if (c.scrollHeight > c.clientHeight) { if (c.dataset.pausa === "true") return; let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop); let maxScroll = c.scrollHeight - c.clientHeight; if (scrollReal >= maxScroll - 1) { c.scrollTop = maxScroll; c.dataset.pausa = "true"; setTimeout(() => { if (!modoTvActivo) return; c.scrollTop = 0; c.dataset.scrollReal = 0; setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); }, 3500); return; } scrollReal += 0.25; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); } }); frameScrollTV = requestAnimationFrame(loopScroll); } loopScroll(); }
+function detenerScrollAutoTV() { if (frameScrollTV) cancelAnimationFrame(frameScrollTV); document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.scrollReal = 0; c.dataset.pausa = "false"; }); }
 
-    function loopScroll() {
-        if (!modoTvActivo) return;
-        const panelesResto = document.querySelectorAll('.tbody-resto');
-        panelesResto.forEach(c => {
-            if (c.scrollHeight > c.clientHeight) {
-                if (c.dataset.pausa === "true") return;
-
-                let scrollReal = parseFloat(c.dataset.scrollReal || c.scrollTop);
-                let maxScroll = c.scrollHeight - c.clientHeight;
-
-                if (scrollReal >= maxScroll - 1) {
-                    c.scrollTop = maxScroll; c.dataset.pausa = "true";
-                    setTimeout(() => { 
-                        if (!modoTvActivo) return;
-                        c.scrollTop = 0; c.dataset.scrollReal = 0;
-                        setTimeout(() => { if (!modoTvActivo) return; c.dataset.pausa = "false"; }, 3000); 
-                    }, 3500); 
-                    return;
-                }
-                
-                scrollReal += 0.25; c.dataset.scrollReal = scrollReal; c.scrollTop = Math.floor(scrollReal); 
-            }
-        });
-        frameScrollTV = requestAnimationFrame(loopScroll);
-    }
-    loopScroll();
-}
-function detenerScrollAutoTV() {
-    if (frameScrollTV) cancelAnimationFrame(frameScrollTV);
-    document.querySelectorAll('.tbody-resto').forEach(c => { c.dataset.scrollReal = 0; c.dataset.pausa = "false"; });
-}
-
-function renderizarBotonesTorneosAdmin() {
-    const div = document.getElementById('botones-torneos');
-    if (!div) return;
-    div.innerHTML = '';
-    listaTorneos.forEach(t => { div.innerHTML += `<button class="btn-torneo ${torneoAdmin && torneoAdmin.id === t.id ? 'admin-selected' : ''}" onclick="seleccionarTorneoAdmin('${t.id}')">${t.nombre}</button>`; });
-}
+function renderizarBotonesTorneosAdmin() { const div = document.getElementById('botones-torneos'); if (!div) return; div.innerHTML = ''; listaTorneos.forEach(t => { div.innerHTML += `<button class="btn-torneo ${torneoAdmin && torneoAdmin.id === t.id ? 'admin-selected' : ''}" onclick="seleccionarTorneoAdmin('${t.id}')">${t.nombre}</button>`; }); }
 
 window.seleccionarTorneoAdmin = async function(id) {
-    torneoAdmin = listaTorneos.find(t => t.id === id);
-    if (!torneoAdmin) return;
-    if(!torneoAdmin.platos_por_serie) torneoAdmin.platos_por_serie = 12;
-    
+    torneoAdmin = listaTorneos.find(t => t.id === id); if (!torneoAdmin) return;
+    if(!torneoAdmin.platos_por_serie) torneoAdmin.platos_por_serie = 12; if(!torneoAdmin.vueltas) torneoAdmin.vueltas = 1; if(!torneoAdmin.paralelos) torneoAdmin.paralelos = [];
     document.getElementById('admin-torneo-titulo').innerText = `${torneoAdmin.nombre}`;
-    tiradorJuezActivoId = null; 
-    grupoJuecesActivo = 'Todos';
+    tiradorJuezActivoId = null; grupoJuecesActivo = 'Todos'; juezPlatoSeleccionadoIdx = null; vueltaJuezActiva = 1;
+    document.getElementById('edit-nombre-torneo').value = torneoAdmin.nombre; document.getElementById('edit-fecha-torneo').value = torneoAdmin.fecha || '';
     
-    document.getElementById('edit-nombre-torneo').value = torneoAdmin.nombre;
-    document.getElementById('edit-fecha-torneo').value = torneoAdmin.fecha || '';
+    let disc = torneoAdmin.disciplina || 'Helice'; let editDisc = document.getElementById('edit-disciplina'); if (editDisc) { editDisc.value = disc; cambiarDisciplinaUi('edit'); }
+    document.getElementById('edit-vueltas').value = torneoAdmin.vueltas;
     
-    // Configurar campos de disciplina
-    let disc = torneoAdmin.disciplina || 'Helice';
-    let editDisc = document.getElementById('edit-disciplina');
-    if (editDisc) { 
-        editDisc.value = disc; 
-        cambiarDisciplinaUi('edit'); 
-    }
-    
-    let editPlatos = document.getElementById('edit-platos');
-    let editCustom = document.getElementById('edit-platos-custom');
-    let encontrado = false;
-    for (let i = 0; i < editPlatos.options.length; i++) {
-        if (editPlatos.options[i].value == torneoAdmin.platos_por_serie) { 
-            editPlatos.selectedIndex = i; 
-            encontrado = true; 
-            break; 
-        }
-    }
-    if (!encontrado && editPlatos) {
-        editPlatos.value = 'Personalizado';
-        editCustom.value = torneoAdmin.platos_por_serie;
-        cambiarPlatosPersonalizado('edit');
+    let editPlatos = document.getElementById('edit-platos'); let editCustom = document.getElementById('edit-platos-custom');
+    if (torneoAdmin.modo_sin_limite) {
+        editPlatos.value = 'SinLímite';
+    } else {
+        let encontrado = false; for (let i = 0; i < editPlatos.options.length; i++) { if (editPlatos.options[i].value == torneoAdmin.platos_por_serie) { editPlatos.selectedIndex = i; encontrado = true; break; } }
+        if (!encontrado && editPlatos) { editPlatos.value = 'Personalizado'; editCustom.value = torneoAdmin.platos_por_serie; cambiarPlatosPersonalizado('edit'); }
     }
     
     document.getElementById('edit-grupo-size').value = torneoAdmin.tamano_grupo || 1;
-
-    // BOTON DE ESTADO
-    const btnEstado = document.getElementById('btn-estado-torneo');
-    if (btnEstado) {
-        let enCurso = torneoAdmin.estado === 'En curso';
-        btnEstado.innerText = enCurso ? '⏹ Finalizar Transmisión' : '▶ Activar "EN CURSO"';
-        btnEstado.style.backgroundColor = enCurso ? 'var(--danger)' : '#2EA043';
-        btnEstado.style.color = 'white';
-        btnEstado.style.border = 'none';
-    }
-
-    cargarFormularioCostos(); renderizarSelectsCategorias(); renderizarBotonesTorneosAdmin(); await cargarResultados(torneoAdmin.id);
+    const btnEstado = document.getElementById('btn-estado-torneo'); if (btnEstado) { let enCurso = torneoAdmin.estado === 'En curso'; btnEstado.innerText = enCurso ? '⏹ Finalizar Transmisión' : '▶ Activar "EN CURSO"'; btnEstado.style.backgroundColor = enCurso ? 'var(--danger)' : '#2EA043'; btnEstado.style.color = 'white'; btnEstado.style.border = 'none'; }
+    cargarFormularioCostos(); renderizarParalelosConfig(); renderSelectCategoriasGeneral(); renderizarBotonesTorneosAdmin(); await cargarResultados(torneoAdmin.id);
 }
 
-// NUEVA FUNCIÓN ESTADO TORNEO
-window.toggleEstadoTorneoActual = async function() {
-    if (!torneoAdmin) return;
-    let nuevoEstado = (torneoAdmin.estado === 'En curso') ? 'Finalizado' : 'En curso';
-    await clienteSupabase.from('torneos').update({ estado: nuevoEstado }).eq('id', torneoAdmin.id);
-    torneoAdmin.estado = nuevoEstado;
-    
-    seleccionarTorneoAdmin(torneoAdmin.id);
-    avisarALaTV(); 
-}
-
-window.abrirPestana = function(idTab, elementoBtn) {
-    document.querySelectorAll('.tab-pane').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.getElementById(idTab).classList.add('active'); elementoBtn.classList.add('active');
-}
+window.toggleEstadoTorneoActual = async function() { if (!torneoAdmin) return; let nuevoEstado = (torneoAdmin.estado === 'En curso') ? 'Finalizado' : 'En curso'; await clienteSupabase.from('torneos').update({ estado: nuevoEstado }).eq('id', torneoAdmin.id); torneoAdmin.estado = nuevoEstado; seleccionarTorneoAdmin(torneoAdmin.id); avisarALaTV(); }
+window.abrirPestana = function(idTab, elementoBtn) { document.querySelectorAll('.tab-pane').forEach(tab => tab.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(idTab).classList.add('active'); elementoBtn.classList.add('active'); }
 
 async function cargarResultados(idTorneo) {
     if (!idTorneo) return;
     const { data } = await clienteSupabase.from('inscripciones').select('*').eq('torneo_id', idTorneo);
     if (data) {
         data.forEach(row => {
-            let totalPlatos = esAdmin ? (torneoAdmin ? torneoAdmin.platos_por_serie : 12) : (torneoTV ? torneoTV.platos_por_serie : 12);
-            if (!row.resultados || !Array.isArray(row.resultados)) row.resultados = Array(totalPlatos).fill(null);
+            const tConf = esAdmin ? torneoAdmin : torneoTV;
+            if (!row.resultados || !Array.isArray(row.resultados)) {
+                row.resultados = tConf.modo_sin_limite ? [] : Array(tConf.platos_por_serie * (tConf.vueltas || 1)).fill(null);
+            }
             row.totalAciertos = row.resultados.filter(r => r === 1).length;
             row.totalTirados = row.resultados.filter(r => r !== null).length;
             row.barrage = row.barrage || 0; row.ausente = row.ausente || false; row.puntajeFinal = row.totalAciertos + row.barrage;
+            row.paralelos_inscriptos = row.paralelos_inscriptos || [];
         });
         tiradoresLocales = data;
     } else tiradoresLocales = [];
 
     const objTorneo = esAdmin ? torneoAdmin : torneoTV;
     if (esAdmin) {
-        renderizarFiltrosCategorias('filtros-cat-admin', objTorneo);
-        renderizarAdminJueces(); renderizarAdminBaseDatos(); renderizarStats();
-        renderizarVistaResultadosUnificada('cabecera-tabla-admin', objTorneo);
-        renderizarPedana('contenedor-pedana-admin', objTorneo);
+        renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); renderizarAdminJueces(); renderizarAdminBaseDatosTorneo(); renderizarStats(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', objTorneo); renderizarPedana('contenedor-pedana-admin', objTorneo);
     } else if (torneoTV) {
-        renderizarFiltrosCategorias('filtros-cat-tv', objTorneo);
-        renderizarVistaResultadosUnificada('cabecera-tabla-tv', objTorneo);
-        renderizarPedana('contenedor-pedana-tv', objTorneo);
-        if (modoVistaTV === 'dividido') {
-            renderizarVistaResultadosUnificada('cabecera-tabla-split', objTorneo);
-            renderizarPedana('contenedor-pedana-split', objTorneo);
-        }
+        renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); renderizarVistaResultadosUnificada('cabecera-tabla-tv', objTorneo); renderizarPedana('contenedor-pedana-tv', objTorneo);
+        if (modoVistaTV === 'dividido') { renderizarVistaResultadosUnificada('cabecera-tabla-split', objTorneo); renderizarPedana('contenedor-pedana-split', objTorneo); }
     }
 }
 
-function obtenerCategorias(torneoConfig) {
-    if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"];
-    return Object.keys(torneoConfig.costos).filter(k => k !== "Objetivo" && k !== "Retencion");
-}
-function renderizarFiltrosCategorias(containerId, torneoConfig) {
-    const cont = document.getElementById(containerId);
-    if (!cont || !torneoConfig) return;
-    const cats = obtenerCategorias(torneoConfig);
-    let html = `<button class="btn-cat ${filtroCategoria === 'Todas' ? 'active' : ''}" onclick="setFiltroCategoria('Todas')">Todas</button>`;
-    cats.forEach(c => { html += `<button class="btn-cat ${filtroCategoria === c ? 'active' : ''}" onclick="setFiltroCategoria('${c}')">${c}</button>`; });
-    cont.innerHTML = html;
-}
-function renderizarSelectsCategorias() {
-    if (!torneoAdmin) return;
-    const cats = obtenerCategorias(torneoAdmin);
-    let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`);
-    const selectAdd = document.getElementById('input-categoria'); const selectEdit = document.getElementById('edit-categoria');
-    if (selectAdd) selectAdd.innerHTML = html; if (selectEdit) selectEdit.innerHTML = html;
-}
-window.setFiltroCategoria = function(cat) { 
-    filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV;
-    if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } 
-    else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); }
-}
-window.setFiltroBusqueda = function(txt) { 
-    filtroBusqueda = txt.toLowerCase(); 
-    if(esAdmin) cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); 
-}
+// PARALELOS
+function renderizarParalelosConfig() { const cont = document.getElementById('lista-paralelos'); if (!cont || !torneoAdmin) return; let paralelos = torneoAdmin.paralelos || []; cont.innerHTML = ''; if (paralelos.length === 0) { cont.innerHTML = '<span style="color: #666; font-size: 0.9rem;">No hay paralelos configurados.</span>'; } else { paralelos.forEach(p => { cont.innerHTML += `<div style="background: #111; border: 1px solid #333; padding: 8px 12px; border-radius: 4px; display: flex; align-items: center; gap: 10px;"><strong>${p.nombre}</strong> - $${p.costo.toLocaleString('es-AR')}<button class="btn-outline-danger" style="padding: 2px 6px; font-size: 0.7rem;" onclick="eliminarParalelo('${p.nombre}')">X</button></div>`; }); } }
+window.agregarParalelo = async function() { let nombre = document.getElementById('input-nuevo-paralelo-nombre').value.trim(); let costo = parseInt(document.getElementById('input-nuevo-paralelo-costo').value); if (!nombre || isNaN(costo)) return mostrarAlerta("Completá nombre y costo numérico."); if (!torneoAdmin.paralelos) torneoAdmin.paralelos = []; if (torneoAdmin.paralelos.find(p => p.nombre.toLowerCase() === nombre.toLowerCase())) return mostrarAlerta("Ese paralelo ya existe."); torneoAdmin.paralelos.push({ nombre: nombre.toUpperCase(), costo: costo }); await clienteSupabase.from('torneos').update({ paralelos: torneoAdmin.paralelos }).eq('id', torneoAdmin.id); document.getElementById('input-nuevo-paralelo-nombre').value = ''; document.getElementById('input-nuevo-paralelo-costo').value = ''; renderizarParalelosConfig(); renderizarAdminBaseDatosTorneo(); }
+window.eliminarParalelo = async function(nombre) { mostrarConfirmacion(`¿Eliminar paralelo ${nombre}?`, async () => { torneoAdmin.paralelos = torneoAdmin.paralelos.filter(p => p.nombre !== nombre); await clienteSupabase.from('torneos').update({ paralelos: torneoAdmin.paralelos }).eq('id', torneoAdmin.id); renderizarParalelosConfig(); renderizarAdminBaseDatosTorneo(); }); }
+window.toggleParaleloTirador = async function(idInscripcion, nombreParalelo) { let t = tiradoresLocales.find(x => x.id === idInscripcion); if (!t) return; if (!t.paralelos_inscriptos) t.paralelos_inscriptos = []; if (t.paralelos_inscriptos.includes(nombreParalelo)) { t.paralelos_inscriptos = t.paralelos_inscriptos.filter(p => p !== nombreParalelo); } else { t.paralelos_inscriptos.push(nombreParalelo); } renderizarAdminBaseDatosTorneo(); await clienteSupabase.from('inscripciones').update({ paralelos_inscriptos: t.paralelos_inscriptos }).eq('id', t.id); }
+
+function obtenerCategorias(torneoConfig) { if (!torneoConfig || !torneoConfig.costos) return ["Senior", "Veterano", "Super Vet.", "Dama", "Principiante", "Junior"]; return Object.keys(torneoConfig.costos).filter(k => k !== "Objetivo" && k !== "Retencion"); }
+function renderizarFiltrosCategorias(containerId, torneoConfig) { const cont = document.getElementById(containerId); if (!cont || !torneoConfig) return; const cats = obtenerCategorias(torneoConfig); let html = `<button class="btn-cat ${filtroCategoria === 'Todas' ? 'active' : ''}" onclick="setFiltroCategoria('Todas')">Todas</button>`; cats.forEach(c => { html += `<button class="btn-cat ${filtroCategoria === c ? 'active' : ''}" onclick="setFiltroCategoria('${c}')">${c}</button>`; }); cont.innerHTML = html; }
+function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
+window.setFiltroCategoria = function(cat) { filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV; if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); } }
+window.setFiltroBusqueda = function(txt) { filtroBusqueda = txt.toLowerCase(); if(esAdmin) cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
 
 function renderizarVistaResultadosUnificada(idCabecera, torneoConfig) {
-    const theadDOM = document.getElementById(idCabecera);
-    if (!theadDOM || !torneoConfig) return;
+    const theadDOM = document.getElementById(idCabecera); if (!theadDOM || !torneoConfig) return;
     const tabla = theadDOM.parentElement; 
+    let maxCols = torneoConfig.modo_sin_limite ? 0 : (torneoConfig.platos_por_serie * (torneoConfig.vueltas || 1));
+    if(torneoConfig.modo_sin_limite) { tiradoresLocales.forEach(t => { if(t.resultados.length > maxCols) maxCols = t.resultados.length; }); maxCols = Math.max(10, maxCols); }
     
-    tabla.className = torneoConfig.platos_por_serie > 12 ? 'muchos-platos' : '';
-    
+    tabla.className = maxCols > 12 ? 'muchos-platos' : '';
     let listaFiltrada = [...tiradoresLocales];
     if (filtroCategoria !== 'Todas') listaFiltrada = listaFiltrada.filter(t => t.categoria === filtroCategoria);
     if (filtroBusqueda !== '') listaFiltrada = listaFiltrada.filter(t => t.tirador.toLowerCase().includes(filtroBusqueda) || t.categoria.toLowerCase().includes(filtroBusqueda) || t.orden.toString() === filtroBusqueda);
     
-    listaFiltrada.sort((a, b) => {
-        if (a.ausente && !b.ausente) return 1; if (!a.ausente && b.ausente) return -1;
-        return b.puntajeFinal - a.puntajeFinal || b.barrage - a.barrage || b.totalAciertos - a.totalAciertos || a.orden - b.orden;
-    });
-
+    listaFiltrada.sort((a, b) => { if (a.ausente && !b.ausente) return 1; if (!a.ausente && b.ausente) return -1; return b.puntajeFinal - a.puntajeFinal || b.barrage - a.barrage || b.totalAciertos - a.totalAciertos || a.orden - b.orden; });
     let posActual = 1; let lastScoreIdentifier = null;
-    listaFiltrada.forEach((row, index) => {
-        if (row.ausente) { row.posicionFija = '-'; return; }
-        let currentScoreIdentifier = `${row.puntajeFinal}-${row.barrage}-${row.totalAciertos}`;
-        if (lastScoreIdentifier !== currentScoreIdentifier) { posActual = index + 1; lastScoreIdentifier = currentScoreIdentifier; }
-        row.posicionFija = posActual;
-    });
+    listaFiltrada.forEach((row, index) => { if (row.ausente) { row.posicionFija = '-'; return; } let currentScoreIdentifier = `${row.puntajeFinal}-${row.barrage}-${row.totalAciertos}`; if (lastScoreIdentifier !== currentScoreIdentifier) { posActual = index + 1; lastScoreIdentifier = currentScoreIdentifier; } row.posicionFija = posActual; });
 
     const wPos = '4%', wNum = '4%', wTirador = '21%', wCat = '8%', wTot = '5.5%', wBar = '5.5%', wFin = '6%';
-    const wPlato = (46 / Math.max(1, torneoConfig.platos_por_serie)) + '%'; 
+    const wPlato = (46 / Math.max(1, maxCols)) + '%'; 
 
     let htmlCabecera = `<thead id="${idCabecera}"><tr><th style="width:${wPos}; text-align:center;">POS.</th><th style="width:${wNum}; text-align:center;">Nº</th><th style="width:${wTirador}; text-align:left; padding-left:15px;">TIRADOR</th><th style="width:${wCat}; text-align:center;">CAT.</th>`;
-    for(let i=1; i<=torneoConfig.platos_por_serie; i++) htmlCabecera += `<th style="width:${wPlato}; text-align:center;">${i}</th>`;
+    for(let i=1; i<=maxCols; i++) {
+        let title = i;
+        if (!torneoConfig.modo_sin_limite && (torneoConfig.vueltas || 1) > 1) { let v = Math.ceil(i/torneoConfig.platos_por_serie); let numPlatoEnV = i - ((v-1)*torneoConfig.platos_por_serie); title = `R${v}<br>${numPlatoEnV}`; }
+        htmlCabecera += `<th style="width:${wPlato}; text-align:center;">${title}</th>`;
+    }
     htmlCabecera += `<th style="width:${wTot}; text-align:center;">TOTAL</th><th style="width:${wBar}; text-align:center;">BARRAGE</th><th style="width:${wFin}; text-align:center;">FINAL</th></tr></thead>`;
 
     function buildFilas(lista) {
         let html = '';
         lista.forEach(row => {
             let htmlPlatosMultiTD = '';
-            for(let i = 0; i < torneoConfig.platos_por_serie; i++) {
+            for(let i = 0; i < maxCols; i++) {
                 let val = row.resultados[i];
                 if (val === 1) htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box plate-hit mx-auto">✔</div></td>`; 
                 else if (val === 0) htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box plate-miss mx-auto">✖</div></td>`; 
                 else htmlPlatosMultiTD += `<td style="width:${wPlato}; text-align:center;"><div class="plate-box mx-auto">-</div></td>`;
             }
             let barrageTxt = row.barrage > 0 && !row.ausente ? `<span style="color:var(--accent-yellow); font-weight:900;">${row.barrage}</span>` : '-';
-            let badgeSerie = row.totalAciertos === torneoConfig.platos_por_serie && torneoConfig.platos_por_serie > 0 && !row.ausente ? `<span class="badge-serie">EN SERIE</span>` : '';
+            let enSerieCond = torneoConfig.modo_sin_limite ? (row.totalAciertos > 0 && row.totalAciertos === row.totalTirados) : (row.totalAciertos === maxCols && maxCols > 0);
+            let badgeSerie = enSerieCond && !row.ausente ? `<span class="badge-serie">EN SERIE</span>` : '';
             let ausenteBadge = row.ausente ? `<span style="background:var(--danger); color:white; font-size:0.65rem; padding:2px 6px; border-radius:3px; margin-left:8px; font-weight:bold;">AUSENTE</span>` : '';
             let catClass = row.categoria.toLowerCase().includes('vet') ? 'supervet' : (row.categoria.toLowerCase().includes('junior') ? 'junior' : (row.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
             
-            html += `<tr style="${row.ausente ? 'opacity: 0.35;' : ''}">
-                <td style="width:${wPos}; color: white; font-weight: bold; background-color: #050505; text-align:center;">${row.posicionFija}</td>
-                <td style="width:${wNum}; text-align:center; font-weight: normal; color: #AAA;">${row.orden}</td>
-                <td style="width:${wTirador}; text-align: left; padding-left:15px; font-weight:bold; white-space:nowrap; overflow:hidden; color:white;" title="${row.tirador}">${formatearNombre(row.tirador)} ${badgeSerie} ${ausenteBadge}</td>
-                <td style="width:${wCat}; font-size: 0.85rem; text-align:center;"><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td>
-                ${htmlPlatosMultiTD}
-                <td style="width:${wTot}; font-size: 1.3rem; font-weight: bold; text-align:center; color:white;">${row.ausente ? '-' : row.totalAciertos}</td>
-                <td style="width:${wBar}; font-size: 1.2rem; font-weight: bold; text-align:center;">${barrageTxt}</td>
-                <td style="width:${wFin}; font-size: 1.6rem; font-weight: bold; color: white; text-align:center;">${row.ausente ? '-' : row.puntajeFinal}</td>
-            </tr>`;
+            html += `<tr style="${row.ausente ? 'opacity: 0.35;' : ''}"><td style="width:${wPos}; color: white; font-weight: bold; background-color: #050505; text-align:center;">${row.posicionFija}</td><td style="width:${wNum}; text-align:center; font-weight: normal; color: #AAA;">${row.orden}</td><td style="width:${wTirador}; text-align: left; padding-left:15px; font-weight:bold; white-space:nowrap; overflow:hidden; color:white;" title="${row.tirador}">${formatearNombre(row.tirador)} ${badgeSerie} ${ausenteBadge}</td><td style="width:${wCat}; font-size: 0.85rem; text-align:center;"><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td>${htmlPlatosMultiTD}<td style="width:${wTot}; font-size: 1.3rem; font-weight: bold; text-align:center; color:white;">${row.ausente ? '-' : row.totalAciertos}</td><td style="width:${wBar}; font-size: 1.2rem; font-weight: bold; text-align:center;">${barrageTxt}</td><td style="width:${wFin}; font-size: 1.6rem; font-weight: bold; color: white; text-align:center;">${row.ausente ? '-' : row.puntajeFinal}</td></tr>`;
         });
         return html;
     }
 
     let htmlCompleto = htmlCabecera;
     if (modoTvActivo) {
-        let enSerie = listaFiltrada.filter(t => t.totalAciertos === torneoConfig.platos_por_serie && t.totalTirados > 0 && !t.ausente);
-        let resto = listaFiltrada.filter(t => !(t.totalAciertos === torneoConfig.platos_por_serie && t.totalTirados > 0 && !t.ausente));
+        let enSerie = listaFiltrada.filter(t => (torneoConfig.modo_sin_limite ? (t.totalAciertos > 0 && t.totalAciertos === t.totalTirados) : (t.totalAciertos === maxCols && t.totalTirados > 0)) && !t.ausente);
+        let resto = listaFiltrada.filter(t => !((torneoConfig.modo_sin_limite ? (t.totalAciertos > 0 && t.totalAciertos === t.totalTirados) : (t.totalAciertos === maxCols && t.totalTirados > 0)) && !t.ausente));
         htmlCompleto += `<tbody class="tbody-enserie">`;
         if(enSerie.length > 0) { htmlCompleto += `<tr class="tr-separador"><td colspan="100%"><div class="separador-box">EN SERIE</div></td></tr>` + buildFilas(enSerie); }
         htmlCompleto += `</tbody>`;
         if(resto.length > 0) { htmlCompleto += `<tbody class="tbody-resto-header"><tr class="tr-separador"><td colspan="100%"><div class="separador-box">RESTO DE LOS TIRADORES</div></td></tr></tbody><tbody class="tbody-resto">` + buildFilas(resto) + `</tbody>`; }
-    } else {
-        htmlCompleto += `<tbody>` + buildFilas(listaFiltrada) + `</tbody>`;
-    }
+    } else { htmlCompleto += `<tbody>` + buildFilas(listaFiltrada) + `</tbody>`; }
     tabla.innerHTML = htmlCompleto;
 }
 
 function renderizarPedana(containerId, torneoConfig) {
-    const cont = document.getElementById(containerId);
-    if (!cont || !torneoConfig) return;
+    const cont = document.getElementById(containerId); if (!cont || !torneoConfig) return;
     let lista = [...tiradoresLocales].sort((a,b) => a.orden - b.orden);
     if (lista.length === 0) { cont.innerHTML = '<h3 style="text-align:center;">No hay tiradores</h3>'; return; }
-    
-    let idx = torneoConfig.tirador_actual_index || 0;
-    if (idx >= lista.length) idx = lista.length - 1;
-    let actual = lista[idx];
+    let idx = torneoConfig.tirador_actual_index || 0; if (idx >= lista.length) idx = lista.length - 1; let actual = lista[idx];
 
     let htmlPlatos = `<div class="plates-container" style="flex-wrap: wrap; justify-content: center; margin-top: 15px; gap: 6px;">`;
-    let tirados = 0;
-    for(let i=0; i<torneoConfig.platos_por_serie; i++){
-        let val = actual.resultados[i]; if(val !== null) tirados++;
-        if(val === 1) htmlPlatos += `<div class="plate-box pedana-plate plate-hit">✔</div>`;
-        else if (val === 0) htmlPlatos += `<div class="plate-box pedana-plate plate-miss">✖</div>`;
-        else htmlPlatos += `<div class="plate-box pedana-plate" style="background-color: #111;"></div>`;
+    let tirados = 0; let totalP = torneoConfig.modo_sin_limite ? Math.max(5, actual.resultados.length) : (torneoConfig.platos_por_serie * (torneoConfig.vueltas || 1));
+    for(let i=0; i<totalP; i++){
+        let val = actual.resultados[i]; if(val !== null && val !== undefined) tirados++;
+        if(val === 1) htmlPlatos += `<div class="plate-box pedana-plate plate-hit">✔</div>`; else if (val === 0) htmlPlatos += `<div class="plate-box pedana-plate plate-miss">✖</div>`; else htmlPlatos += `<div class="plate-box pedana-plate" style="background-color: #111;"></div>`;
     }
     htmlPlatos += '</div>';
 
@@ -478,76 +359,40 @@ function renderizarPedana(containerId, torneoConfig) {
             let catClass = sig.categoria.toLowerCase().includes('vet') ? 'supervet' : (sig.categoria.toLowerCase().includes('junior') ? 'junior' : (sig.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
             let nombreMostrar = sig.ausente ? `<span style="opacity:0.5;">${formatearNombre(sig.tirador)} [AUS]</span>` : formatearNombre(sig.tirador);
             htmlNext += `<div class="pedana-next-box"><div class="pedana-next-orden">${sig.orden}</div><div class="pedana-next-nombre">${nombreMostrar}</div><div><span class="tag-categoria ${catClass}" style="font-size: 0.9rem; padding: 4px 10px;">${sig.categoria.toUpperCase()}</span></div></div>`;
-        } else {
-            htmlNext += `<div class="pedana-next-box" style="opacity: 0.1;"><div class="pedana-next-orden">-</div></div>`;
-        }
+        } else { htmlNext += `<div class="pedana-next-box" style="opacity: 0.1;"><div class="pedana-next-orden">-</div></div>`; }
     }
     htmlNext += '</div></div>';
 
     let catClassAct = actual.categoria.toLowerCase().includes('vet') ? 'supervet' : (actual.categoria.toLowerCase().includes('junior') ? 'junior' : (actual.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
-    cont.innerHTML = `<div class="pedana-container"><div class="pedana-main" style="${actual.ausente ? 'opacity:0.5;' : ''}"><div class="pedana-lbl">LLAMADO A PEDANA</div><div class="pedana-orden">${actual.orden}</div><div class="pedana-nombre">${actual.ausente ? 'AUSENTE: ' : ''}${actual.tirador}</div><div><span class="tag-categoria ${catClassAct}" style="font-size: 1.1rem; padding: 5px 16px;">${actual.categoria.toUpperCase()}</span></div>${htmlPlatos}<div class="pedana-stats"><span class="numero-grande">${actual.totalAciertos}</span><span class="texto-chico">DE ${torneoConfig.platos_por_serie} PLATOS • ${tirados} TIRADOS</span></div></div>${htmlNext}</div>`;
+    let subTxt = torneoConfig.modo_sin_limite ? `${tirados} TIRADOS EN MODO SIN LÍMITE` : `DE ${totalP} OBJETIVOS • ${tirados} TIRADOS`;
+    cont.innerHTML = `<div class="pedana-container"><div class="pedana-main" style="${actual.ausente ? 'opacity:0.5;' : ''}"><div class="pedana-lbl">LLAMADO A PEDANA</div><div class="pedana-orden">${actual.orden}</div><div class="pedana-nombre">${actual.ausente ? 'AUSENTE: ' : ''}${actual.tirador}</div><div><span class="tag-categoria ${catClassAct}" style="font-size: 1.1rem; padding: 5px 16px;">${actual.categoria.toUpperCase()}</span></div>${htmlPlatos}<div class="pedana-stats"><span class="numero-grande">${actual.totalAciertos}</span><span class="texto-chico">${subTxt}</span></div></div>${htmlNext}</div>`;
 }
 
-window.cambiarPedana = async function(delta) {
-    if (!torneoAdmin) return;
-    let max = tiradoresLocales.length - 1; let newIdx = (torneoAdmin.tirador_actual_index || 0) + delta;
-    if (newIdx < 0) newIdx = 0; if (newIdx > max) newIdx = max;
-    await clienteSupabase.from('torneos').update({ tirador_actual_index: newIdx }).eq('id', torneoAdmin.id);
-    torneoAdmin.tirador_actual_index = newIdx; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV();
-}
-
-async function sincronizarPedanaConJuez(idSeleccionado) {
-    const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
-    let i = porOrden.findIndex(x => x.id === idSeleccionado);
-    if (i !== -1) {
-        let indexPedana = i + 1; if (indexPedana >= porOrden.length) indexPedana = Math.max(0, porOrden.length - 1);
-        await clienteSupabase.from('torneos').update({ tirador_actual_index: indexPedana }).eq('id', torneoAdmin.id);
-        torneoAdmin.tirador_actual_index = indexPedana; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV();
-    }
-}
+window.cambiarPedana = async function(delta) { if (!torneoAdmin) return; let max = tiradoresLocales.length - 1; let newIdx = (torneoAdmin.tirador_actual_index || 0) + delta; if (newIdx < 0) newIdx = 0; if (newIdx > max) newIdx = max; await clienteSupabase.from('torneos').update({ tirador_actual_index: newIdx }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = newIdx; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV(); }
+async function sincronizarPedanaConJuez(idSeleccionado) { const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); let i = porOrden.findIndex(x => x.id === idSeleccionado); if (i !== -1) { let indexPedana = i + 1; if (indexPedana >= porOrden.length) indexPedana = Math.max(0, porOrden.length - 1); await clienteSupabase.from('torneos').update({ tirador_actual_index: indexPedana }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = indexPedana; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV(); } }
 
 function claveRanking(t) { return [t.puntajeFinal, t.barrage || 0, t.totalAciertos]; }
 function mismoRanking(a, b) { const x = claveRanking(a), y = claveRanking(b); return x[0] === y[0] && x[1] === y[1] && x[2] === y[2]; }
 function ganadoresDeCategoria(cat) {
-    const lista = tiradoresLocales.filter(t => t.categoria === cat && !t.ausente);
-    if (lista.length === 0) return null;
-    const conTiros = lista.filter(t => t.totalTirados > 0); const provisorio = lista.some(t => t.totalTirados < torneoAdmin.platos_por_serie);
+    const lista = tiradoresLocales.filter(t => t.categoria === cat && !t.ausente); if (lista.length === 0) return null;
+    const conTiros = lista.filter(t => t.totalTirados > 0); 
+    let totP = torneoAdmin.modo_sin_limite ? 9999 : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
+    const provisorio = torneoAdmin.modo_sin_limite ? true : lista.some(t => t.totalTirados < totP);
     if (conTiros.length === 0) return { ganadores: [], empate: false, provisorio: true, total: lista.length };
     const ordenados = [...conTiros].sort((a, b) => b.puntajeFinal - a.puntajeFinal || (b.barrage || 0) - (a.barrage || 0) || b.totalAciertos - a.totalAciertos || a.orden - b.orden);
-    const mejor = ordenados[0]; const ganadores = ordenados.filter(t => mismoRanking(t, mejor)); let esEmpate = ganadores.length > 1;
-    return { ganadores, empate: esEmpate, provisorio, total: lista.length };
+    const mejor = ordenados[0]; const ganadores = ordenados.filter(t => mismoRanking(t, mejor)); let esEmpate = ganadores.length > 1; return { ganadores, empate: esEmpate, provisorio, total: lista.length };
 }
-function htmlGanadoresPorCategoria() {
-    let html = '<div class="winners-grid">';
-    obtenerCategorias(torneoAdmin).forEach(cat => {
-        const g = ganadoresDeCategoria(cat);
-        if (!g) { html += `<div class="winner-box vacio"><h4>${cat.toUpperCase()}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Sin tiradores</div></div>`; return; }
-        const estado = g.provisorio ? '<span class="winner-estado prov">PROVISORIO</span>' : '<span class="winner-estado fin">FINAL</span>';
-        if (g.ganadores.length === 0) { html += `<div class="winner-box"><h4>${cat.toUpperCase()} ${estado}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Aún sin resultados</div></div>`; return; }
-        const nombres = g.ganadores.map(t => `<div class="winner-name">${t.tirador} <span class="winner-orden">Nº ${t.orden}</span></div>`).join('');
-        html += `<div class="winner-box ${g.empate ? 'empate' : 'unico'}"><h4>${cat.toUpperCase()} ${estado}</h4>${g.empate ? `<div class="winner-tag">EMPATE</div>` : ''}${nombres}<div class="winner-pts">${g.ganadores[0].totalAciertos} de ${torneoAdmin.platos_por_serie}${g.ganadores[0].barrage > 0 ? ` (barrage ${g.ganadores[0].barrage})` : ''}</div></div>`;
-    });
-    return html + '</div>';
-}
+function htmlGanadoresPorCategoria() { let html = '<div class="winners-grid">'; obtenerCategorias(torneoAdmin).forEach(cat => { const g = ganadoresDeCategoria(cat); if (!g) { html += `<div class="winner-box vacio"><h4>${cat.toUpperCase()}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Sin tiradores</div></div>`; return; } const estado = g.provisorio ? '<span class="winner-estado prov">PROVISORIO</span>' : '<span class="winner-estado fin">FINAL</span>'; if (g.ganadores.length === 0) { html += `<div class="winner-box"><h4>${cat.toUpperCase()} ${estado}</h4><div class="winner-name" style="color:var(--text-muted); font-size:1rem;">Aún sin resultados</div></div>`; return; } const nombres = g.ganadores.map(t => `<div class="winner-name">${t.tirador} <span class="winner-orden">Nº ${t.orden}</span></div>`).join(''); html += `<div class="winner-box ${g.empate ? 'empate' : 'unico'}"><h4>${cat.toUpperCase()} ${estado}</h4>${g.empate ? `<div class="winner-tag">EMPATE</div>` : ''}${nombres}<div class="winner-pts">${g.ganadores[0].totalAciertos} ${torneoAdmin.modo_sin_limite?'aciertos':`de ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)}`}${g.ganadores[0].barrage > 0 ? ` (barrage ${g.ganadores[0].barrage})` : ''}</div></div>`; }); return html + '</div>'; }
 
 function renderizarStats() {
-    const cont = document.getElementById('contenedor-stats'); if (!cont || !torneoAdmin) return;
-    if (tiradoresLocales.length === 0) { cont.innerHTML = '<p>No hay datos.</p>'; return; }
+    const cont = document.getElementById('contenedor-stats'); if (!cont || !torneoAdmin) return; if (tiradoresLocales.length === 0) { cont.innerHTML = '<p>No hay datos.</p>'; return; }
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
-    const catsList = obtenerCategorias(torneoAdmin);
-    let presentes = tiradoresLocales.filter(t => !t.ausente);
-    let totTiradores = presentes.length; let totObjetivos = totTiradores * torneoAdmin.platos_por_serie; let tirados = 0, pegados = 0, errados = 0, recaudado = 0; let catsCount = {};
-    catsList.forEach(c => catsCount[c] = 0);
-    presentes.forEach(t => { if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++; else catsCount[t.categoria] = 1; recaudado += (costos[t.categoria] || 0); t.resultados.forEach(r => { if(r !== null) { tirados++; if(r===1) pegados++; else errados++; } }); });
+    const catsList = obtenerCategorias(torneoAdmin); let presentes = tiradoresLocales.filter(t => !t.ausente); let totTiradores = presentes.length; let totObjetivos = torneoAdmin.modo_sin_limite ? '∞' : (totTiradores * torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)); let tirados = 0, pegados = 0, errados = 0, recaudado = 0; let catsCount = {}; catsList.forEach(c => catsCount[c] = 0);
+    let paralelos = torneoAdmin.paralelos || [];
+    presentes.forEach(t => { if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++; else catsCount[t.categoria] = 1; let subtotal = (costos[t.categoria] || 0); let pins = t.paralelos_inscriptos || []; paralelos.forEach(p => { if(pins.includes(p.nombre)) subtotal += p.costo; }); recaudado += subtotal; t.resultados.forEach(r => { if(r !== null && r !== undefined) { tirados++; if(r===1) pegados++; else errados++; } }); });
     let premios = Math.max(0, recaudado - (tirados * (costos["Objetivo"] || 1000)) - ((recaudado * (costos["Retencion"] || 10)) / 100));
     let htmlCatsGrid = ''; catsList.forEach(c => { htmlCatsGrid += `<div class="stat-box"><h4>${c.toUpperCase()}</h4><div class="val">${catsCount[c] || 0}</div></div>`; });
-    
-    cont.innerHTML = `
-        <h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div>
-        <div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${totTiradores} presentes x ${torneoAdmin.platos_por_serie} platos</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${totObjetivos - tirados} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div>
-        <h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div>
-        <h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}
-        <h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>`;
+    cont.innerHTML = `<h2 class="titulo-amarillo">OBJETIVOS Y PARTICIPACIÓN</h2><div style="color: var(--danger); font-weight: bold; margin-bottom: 15px; font-size: 0.9rem;">(Los ${tiradoresLocales.length - presentes.length} tiradores ausentes han sido excluidos del conteo)</div><div class="stats-grid"><div class="stat-box azul"><h4>OBJETIVOS TOTALES</h4><div class="val">${totObjetivos}</div><div class="sub">${torneoAdmin.modo_sin_limite?'Sin límite':`${totTiradores} pres. x ${torneoAdmin.platos_por_serie * (torneoAdmin.vueltas||1)} platos`}</div></div><div class="stat-box" style="border-top-color: white;"><h4>TIRADOS</h4><div class="val">${tirados}</div><div class="sub">${torneoAdmin.modo_sin_limite?'-':(totObjetivos - tirados)} por tirar</div></div><div class="stat-box verde"><h4>ACERTADOS</h4><div class="val">${pegados}</div><div class="sub">${tirados>0?((pegados/tirados)*100).toFixed(1):0}% de aciertos</div></div><div class="stat-box rojo"><h4>ERRADOS</h4><div class="val">${errados}</div><div class="sub">${tirados>0?((errados/tirados)*100).toFixed(1):0}% de errados</div></div></div><h2 class="titulo-amarillo">TIRADORES POR CATEGORÍA</h2><div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));">${htmlCatsGrid}</div><h2 class="titulo-amarillo">GANADORES POR CATEGORÍA</h2>${htmlGanadoresPorCategoria()}<h2 class="titulo-amarillo">FINANZAS</h2><div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);"><div class="stat-box"><h4>TOTAL RECAUDADO</h4><div class="val">$ ${(recaudado).toLocaleString('es-AR')}</div><div class="sub">Inscripciones + Paralelos</div></div><div class="stat-box"><h4>SE QUEDA EL CLUB</h4><div class="val" style="color:var(--accent-yellow);">$ ${(recaudado - premios).toLocaleString('es-AR')}</div><div class="sub">Retención + Objetivos</div></div><div class="stat-box"><h4>VA A PREMIOS</h4><div class="val">$ ${(premios).toLocaleString('es-AR')}</div></div></div>`;
 }
 
 function cargarFormularioCostos() {
@@ -560,260 +405,207 @@ function cargarFormularioCostos() {
         else { contCat.innerHTML += `<div style="background: #111; padding: 12px; border-radius: 6px; border: 1px solid #222;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><label style="font-size: 0.85rem; color: var(--text-muted); font-weight: bold;">${label}</label><button class="btn-outline-danger" style="padding: 2px 6px; font-size: 0.7rem; line-height: 1;" onclick="eliminarCategoriaConfig('${key}')">X</button></div><input type="number" class="input-costo-guardar" data-key="${key}" value="${costos[key]}" style="width:100%; box-sizing:border-box; background-color: #000;"></div>`; }
     }
 }
-window.agregarCategoriaConfig = function() {
-    if (!torneoAdmin) return; const nuevaCat = document.getElementById('input-nueva-cat').value.trim();
-    if (!nuevaCat) return mostrarAlerta("Ingrese el nombre de la nueva categoría."); if (!torneoAdmin.costos) torneoAdmin.costos = {};
-    if (torneoAdmin.costos[nuevaCat] !== undefined) return mostrarAlerta("Esa categoría ya existe.");
-    torneoAdmin.costos[nuevaCat] = 0; document.getElementById('input-nueva-cat').value = ''; cargarFormularioCostos(); renderizarSelectsCategorias(); mostrarAlerta(`Categoría "${nuevaCat}" agregada. Presioná 'Guardar Costos'.`);
-}
-window.eliminarCategoriaConfig = function(catKey) {
-    mostrarConfirmacion(`¿Eliminar categoría "${catKey}"?`, async () => {
-        delete torneoAdmin.costos[catKey]; await clienteSupabase.from('torneos').update({ costos: torneoAdmin.costos }).eq('id', torneoAdmin.id);
-        cargarFormularioCostos(); renderizarSelectsCategorias(); renderizarAdminBaseDatos(); renderizarStats(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Eliminada correctamente.");
-    });
-}
-window.guardarCostos = async function() {
-    if (!torneoAdmin) return; let nuevosCostos = {};
-    document.querySelectorAll('.input-costo-guardar').forEach(inp => { nuevosCostos[inp.getAttribute('data-key')] = parseInt(inp.value) || 0; });
-    await clienteSupabase.from('torneos').update({ costos: nuevosCostos }).eq('id', torneoAdmin.id);
-    torneoAdmin.costos = nuevosCostos; renderizarAdminBaseDatos(); renderizarStats(); renderizarSelectsCategorias(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Costos actualizados con éxito.");
-}
+window.agregarCategoriaConfig = function() { if (!torneoAdmin) return; const nuevaCat = document.getElementById('input-nueva-cat').value.trim(); if (!nuevaCat) return mostrarAlerta("Ingrese el nombre de la nueva categoría."); if (!torneoAdmin.costos) torneoAdmin.costos = {}; if (torneoAdmin.costos[nuevaCat] !== undefined) return mostrarAlerta("Esa categoría ya existe."); torneoAdmin.costos[nuevaCat] = 0; document.getElementById('input-nueva-cat').value = ''; cargarFormularioCostos(); renderSelectCategoriasGeneral(); mostrarAlerta(`Categoría "${nuevaCat}" agregada. Presioná 'Guardar Costos'.`); }
+window.eliminarCategoriaConfig = function(catKey) { mostrarConfirmacion(`¿Eliminar categoría "${catKey}"?`, async () => { delete torneoAdmin.costos[catKey]; await clienteSupabase.from('torneos').update({ costos: torneoAdmin.costos }).eq('id', torneoAdmin.id); cargarFormularioCostos(); renderSelectCategoriasGeneral(); renderizarAdminBaseDatosTorneo(); renderizarStats(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Eliminada correctamente."); }); }
+window.guardarCostos = async function() { if (!torneoAdmin) return; let nuevosCostos = {}; document.querySelectorAll('.input-costo-guardar').forEach(inp => { nuevosCostos[inp.getAttribute('data-key')] = parseInt(inp.value) || 0; }); await clienteSupabase.from('torneos').update({ costos: nuevosCostos }).eq('id', torneoAdmin.id); torneoAdmin.costos = nuevosCostos; renderizarAdminBaseDatosTorneo(); renderizarStats(); renderSelectCategoriasGeneral(); renderizarFiltrosCategorias('filtros-cat-admin', torneoAdmin); mostrarAlerta("Costos actualizados con éxito."); }
+
+function getGruposPlato() { if (!torneoAdmin || torneoAdmin.disciplina !== 'Plato') return []; let size = torneoAdmin.tamano_grupo || 1; let ordenados = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); let grupos = []; for (let i = 0; i < ordenados.length; i += size) { grupos.push(ordenados.slice(i, i + size)); } return grupos; }
 
 // ==========================================
-// MODO JUECES CON GRUPOS/ESCUADRAS (PLATO)
+// PESTAÑA JUECES (LÓGICA RONDAS Y SIN LIMITE)
 // ==========================================
-function getGruposPlato() {
-    if (!torneoAdmin || torneoAdmin.disciplina !== 'Plato') return [];
-    let size = torneoAdmin.tamano_grupo || 1;
-    let ordenados = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
-    let grupos = [];
-    for (let i = 0; i < ordenados.length; i += size) {
-        grupos.push(ordenados.slice(i, i + size));
-    }
-    return grupos;
-}
-
 window.renderizarAdminJueces = function() {
     const sidebar = document.getElementById('juez-lista-tiradores'); if (!sidebar || !torneoAdmin) return; 
-    const contGrupos = document.getElementById('contenedor-grupos-jueces');
-    const selectGrupos = document.getElementById('select-grupo-jueces');
-    sidebar.innerHTML = '';
-    
-    let listaMostrar = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); // Ordenar siempre por Nº para el juez
-    
-    // Filtro por Escuadras (Solo si es Plato)
+    const contGrupos = document.getElementById('contenedor-grupos-jueces'); const selectGrupos = document.getElementById('select-grupo-jueces'); sidebar.innerHTML = '';
+    let listaMostrar = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
     if (torneoAdmin.disciplina === 'Plato') {
-        contGrupos.style.display = 'block';
-        let grupos = getGruposPlato();
-        
-        // Recargar el select si cambió la cantidad de escuadras
-        if (selectGrupos.options.length === 0 || selectGrupos.options.length !== grupos.length + 1) {
-            selectGrupos.innerHTML = '<option value="Todos">Todos los tiradores</option>';
-            grupos.forEach((g, idx) => {
-                selectGrupos.innerHTML += `<option value="${idx}">Escuadra ${idx + 1} (Nº ${g[0].orden} al ${g[g.length-1].orden})</option>`;
-            });
-            selectGrupos.value = grupoJuecesActivo;
-        }
+        contGrupos.style.display = 'block'; let grupos = getGruposPlato();
+        if (selectGrupos.options.length === 0 || selectGrupos.options.length !== grupos.length + 1) { selectGrupos.innerHTML = '<option value="Todos">Todos los tiradores</option>'; grupos.forEach((g, idx) => { selectGrupos.innerHTML += `<option value="${idx}">Escuadra ${idx + 1} (Nº ${g[0].orden} al ${g[g.length-1].orden})</option>`; }); selectGrupos.value = grupoJuecesActivo; }
+        if (grupoJuecesActivo !== 'Todos') { let gIdx = parseInt(grupoJuecesActivo); if (grupos[gIdx]) listaMostrar = grupos[gIdx]; }
+    } else { contGrupos.style.display = 'none'; grupoJuecesActivo = 'Todos'; }
 
-        if (grupoJuecesActivo !== 'Todos') {
-            let gIdx = parseInt(grupoJuecesActivo);
-            if (grupos[gIdx]) listaMostrar = grupos[gIdx];
-        }
-    } else {
-        contGrupos.style.display = 'none';
-        grupoJuecesActivo = 'Todos';
-    }
+    const filtro = document.getElementById('buscador-jueces').value.toLowerCase(); if (filtro) listaMostrar = listaMostrar.filter(t => t.tirador.toLowerCase().includes(filtro));
+    if (!tiradoresLocales.find(x => x.id === tiradorJuezActivoId)) { tiradorJuezActivoId = (listaMostrar[0] || {}).id; juezPlatoSeleccionadoIdx = null; }
 
-    const filtro = document.getElementById('buscador-jueces').value.toLowerCase();
-    if (filtro) listaMostrar = listaMostrar.filter(t => t.tirador.toLowerCase().includes(filtro));
-    
-    if (!tiradoresLocales.find(x => x.id === tiradorJuezActivoId)) {
-        tiradorJuezActivoId = (listaMostrar[0] || {}).id;
-    }
-
-    listaMostrar.forEach(row => { 
-        sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold;">${row.totalTirados}/${torneoAdmin.platos_por_serie}</span></div>`; 
-    });
-    
+    let totP = torneoAdmin.modo_sin_limite ? '∞' : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
+    listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold;">${row.totalTirados}/${totP}</span></div>`; });
     renderizarPanelDerechoJuez();
 }
 
-window.cambiarGrupoJueces = function() {
-    grupoJuecesActivo = document.getElementById('select-grupo-jueces').value;
-    tiradorJuezActivoId = null; 
-    renderizarAdminJueces();
-}
-
-window.seleccionarTiradorJuez = function(id) { 
-    tiradorJuezActivoId = id; 
-    renderizarAdminJueces(); 
-    sincronizarPedanaConJuez(id); 
-}
-
+window.cambiarGrupoJueces = function() { grupoJuecesActivo = document.getElementById('select-grupo-jueces').value; tiradorJuezActivoId = null; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); }
+window.seleccionarTiradorJuez = function(id) { tiradorJuezActivoId = id; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); sincronizarPedanaConJuez(id); }
 window.cambiarTiradorJuez = function(delta) {
     let listaBase = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
-    
-    // Si estamos en Plato y hay un grupo seleccionado, hacemos que rote dentro del grupo
     if (torneoAdmin.disciplina === 'Plato' && grupoJuecesActivo !== 'Todos') {
-        let grupos = getGruposPlato();
-        let gIdx = parseInt(grupoJuecesActivo);
-        if (grupos[gIdx]) {
-            listaBase = grupos[gIdx];
-            let i = listaBase.findIndex(x => x.id === tiradorJuezActivoId);
-            if (i === -1) i = 0;
-            
-            // Navegación Rotativa
-            let nuevoIdx = i + delta;
-            if (nuevoIdx >= listaBase.length) nuevoIdx = 0; // Vuelve al inicio del grupo
-            if (nuevoIdx < 0) nuevoIdx = listaBase.length - 1; // Vuelve al final del grupo
-            
-            tiradorJuezActivoId = listaBase[nuevoIdx].id;
-        }
+        let grupos = getGruposPlato(); let gIdx = parseInt(grupoJuecesActivo);
+        if (grupos[gIdx]) { listaBase = grupos[gIdx]; let i = listaBase.findIndex(x => x.id === tiradorJuezActivoId); if (i === -1) i = 0; let nuevoIdx = i + delta; if (nuevoIdx >= listaBase.length) nuevoIdx = 0; if (nuevoIdx < 0) nuevoIdx = listaBase.length - 1; tiradorJuezActivoId = listaBase[nuevoIdx].id; }
     } else {
-        // Navegación Lineal (Hélice o Plato viendo "Todos")
-        if (listaBase.length === 0) return;
-        let i = listaBase.findIndex(x => x.id === tiradorJuezActivoId); 
-        if (i === -1) i = 0;
-        tiradorJuezActivoId = listaBase[Math.max(0, Math.min(listaBase.length - 1, i + delta))].id;
+        if (listaBase.length === 0) return; let i = listaBase.findIndex(x => x.id === tiradorJuezActivoId); if (i === -1) i = 0; tiradorJuezActivoId = listaBase[Math.max(0, Math.min(listaBase.length - 1, i + delta))].id;
     }
-    
-    renderizarAdminJueces(); 
-    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); 
-    if (activo) activo.scrollIntoView({ block: 'nearest' });
-    sincronizarPedanaConJuez(tiradorJuezActivoId);
+    juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); 
+    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); if (activo) activo.scrollIntoView({ block: 'nearest' }); sincronizarPedanaConJuez(tiradorJuezActivoId);
 }
 
+window.seleccionarVueltaJuez = function(v) { vueltaJuezActiva = v; juezPlatoSeleccionadoIdx = null; renderizarPanelDerechoJuez(); }
+window.seleccionarCasillaJuez = function(idx) { juezPlatoSeleccionadoIdx = idx; renderizarPanelDerechoJuez(); }
+
 function renderizarPanelDerechoJuez() {
-    const panel = document.getElementById('juez-panel-activo'); if (!panel || !tiradorJuezActivoId) { if(panel) panel.innerHTML = '<h2 style="margin-top: 0; color: var(--text-muted); text-align: center;">Seleccione un tirador de la lista</h2>'; return; }
+    const panel = document.getElementById('juez-panel-activo'); 
+    if (!panel || !tiradorJuezActivoId) { if(panel) panel.innerHTML = '<h2 style="margin-top: 0; color: var(--text-muted); text-align: center;">Seleccione un tirador de la lista</h2>'; return; }
     const t = tiradoresLocales.find(x => x.id === tiradorJuezActivoId); if (!t) return;
-    let htmlPlatos = '<div class="plates-container" style="flex-wrap: wrap; justify-content: center; margin-bottom: 30px;">';
-    for(let i = 0; i < torneoAdmin.platos_por_serie; i++) { let val = t.resultados[i]; htmlPlatos += `<div class="plate-box admin-plate ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px;" onclick="togglePlato('${t.id}', ${i}, this)">${val === 1 ? '✔' : (val === 0 ? '✖' : (i + 1))}</div>`; }
+    
+    let isSinLimite = torneoAdmin.modo_sin_limite;
+    let limitRonda = torneoAdmin.platos_por_serie;
+    let totalVueltas = isSinLimite ? 1 : (torneoAdmin.vueltas || 1);
+    
+    if(vueltaJuezActiva > totalVueltas) vueltaJuezActiva = totalVueltas;
+
+    let idxInicioRonda = isSinLimite ? 0 : (vueltaJuezActiva - 1) * limitRonda;
+    let idxFinRonda = isSinLimite ? t.resultados.length : vueltaJuezActiva * limitRonda;
+
+    if (juezPlatoSeleccionadoIdx === null || juezPlatoSeleccionadoIdx < idxInicioRonda || juezPlatoSeleccionadoIdx >= idxFinRonda) {
+        if (isSinLimite) {
+            juezPlatoSeleccionadoIdx = t.resultados.length; // Posicion vacía al final
+        } else {
+            let pendiente = -1;
+            for(let i = idxInicioRonda; i < idxFinRonda; i++) { if(t.resultados[i] === null) { pendiente = i; break; } }
+            juezPlatoSeleccionadoIdx = (pendiente !== -1) ? pendiente : idxInicioRonda; 
+        }
+    }
+    
+    // TABS PARA RONDAS (si hay más de 1)
+    let htmlRondas = '';
+    if(!isSinLimite && totalVueltas > 1) {
+        htmlRondas = '<div style="display:flex; justify-content:center; gap:5px; margin-bottom: 20px;">';
+        for(let v=1; v<=totalVueltas; v++) {
+            let colorActivo = (v === vueltaJuezActiva) ? 'var(--accent)' : '#111';
+            let bordeActivo = (v === vueltaJuezActiva) ? 'white' : '#333';
+            htmlRondas += `<button onclick="seleccionarVueltaJuez(${v})" style="background-color: ${colorActivo}; border: 1px solid ${bordeActivo}; padding: 6px 15px; font-size: 0.9rem; border-radius: 4px;">Ronda ${v}</button>`;
+        }
+        htmlRondas += '</div>';
+    }
+
+    let htmlPlatos = `<div class="plates-container" style="flex-wrap: wrap; justify-content: center; margin-bottom: 20px;">`;
+    
+    if (isSinLimite) {
+        for(let i = 0; i <= t.resultados.length; i++) { 
+            let val = t.resultados[i]; let isSelected = (i === juezPlatoSeleccionadoIdx && !t.ausente) ? 'plato-actual' : ''; 
+            htmlPlatos += `<div class="plate-box admin-plate ${isSelected} ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px; cursor:pointer;" onclick="seleccionarCasillaJuez(${i})">${val === 1 ? '✔' : (val === 0 ? '✖' : (i + 1))}</div>`; 
+        }
+    } else {
+        for(let i = idxInicioRonda; i < idxFinRonda; i++) { 
+            let val = t.resultados[i]; let isSelected = (i === juezPlatoSeleccionadoIdx && !t.ausente) ? 'plato-actual' : ''; 
+            let textVisual = val === 1 ? '✔' : (val === 0 ? '✖' : (i - idxInicioRonda + 1));
+            htmlPlatos += `<div class="plate-box admin-plate ${isSelected} ${val === 1 ? 'plate-hit' : (val === 0 ? 'plate-miss' : '')}" style="width: 45px; height: 45px; font-size:1.2rem; margin:3px; cursor:pointer;" onclick="seleccionarCasillaJuez(${i})">${textVisual}</div>`; 
+        }
+    }
     htmlPlatos += '</div>';
     
     let btnRotativoTxt = (torneoAdmin.disciplina === 'Plato' && grupoJuecesActivo !== 'Todos') ? 'Sig. de Escuadra ↺' : 'Siguiente tirador →';
+    let labelPos = isSinLimite ? (juezPlatoSeleccionadoIdx + 1) : (juezPlatoSeleccionadoIdx - idxInicioRonda + 1);
     
-    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="font-size: 1rem; padding: 10px 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="font-size: 1rem; padding: 10px 20px; background-color: var(--accent); color: black;">${btnRotativoTxt}</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.5rem; color: ${t.totalTirados === torneoAdmin.platos_por_serie ? 'var(--success)' : 'var(--accent-yellow)'}; font-weight: bold; margin-bottom: 5px;">SERIE ${t.totalTirados === torneoAdmin.platos_por_serie ? 'COMPLETA' : 'EN CURSO'}: ${t.totalTirados} DE ${torneoAdmin.platos_por_serie}</div><div style="font-size: 1.1rem; color: var(--text-muted); margin-bottom: 20px;">Aciertos: ${t.totalAciertos}</div><div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-bottom: 20px;">${htmlPlatos}</div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}"><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
+    let botonesGrandes = '';
+    if (!t.ausente) {
+        botonesGrandes = `<div style="font-size: 0.95rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 10px; text-transform: uppercase;">Modificando Posición Nº ${labelPos}</div><div class="panel-juez-botones"><button class="btn-juez-grande btn-juez-acierto" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 1)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✔</div>ACIERTO</button><button class="btn-juez-grande btn-juez-error" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 0)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✖</div>ERROR</button></div><div style="text-align: center; color: #888; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px;">(Toca arriba cualquier casilla para cambiar de posición)</div>`;
+    }
+    
+    let serieTxt = isSinLimite ? `TIRADOS: ${t.totalTirados} | ACIERTOS: ${t.totalAciertos}` : `SERIE ${t.totalTirados === (limitRonda * totalVueltas) ? 'COMPLETA' : 'EN CURSO'}: ${t.totalTirados} DE ${limitRonda * totalVueltas} (Aciertos: ${t.totalAciertos})`;
+
+    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="font-size: 1rem; padding: 10px 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="font-size: 1rem; padding: 10px 20px; background-color: var(--accent); color: white; font-weight: bold; border: none;">${btnRotativoTxt}</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.3rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 15px;">${serieTxt}</div>${htmlRondas}<div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-top: 5px;">${htmlPlatos}${botonesGrandes}</div><div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}"><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
 }
 
-window.toggleAusente = async function(id) {
-    let t = tiradoresLocales.find(x => x.id === id);
-    if(t) { t.ausente = !t.ausente; await clienteSupabase.from('inscripciones').update({ ausente: t.ausente }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarStats(); avisarALaTV(); }
-}
-window.guardarBarrage = async function(id) {
-    let t = tiradoresLocales.find(x => x.id === id); if(t) { t.barrage = parseInt(document.getElementById(`input-barrage-${id}`).value) || 0; t.puntajeFinal = t.totalAciertos + t.barrage; await clienteSupabase.from('inscripciones').update({ barrage: t.barrage }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); avisarALaTV(); }
+window.marcarPlatoRapido = async function(idRow, idx, valor) {
+    let t = tiradoresLocales.find(x => x.id === idRow); if(!t || t.ausente) return;
+    
+    if(torneoAdmin.modo_sin_limite) {
+        if (idx >= t.resultados.length) t.resultados.push(valor); // Añadir nuevo
+        else t.resultados[idx] = valor; // Modificar existente
+        juezPlatoSeleccionadoIdx = t.resultados.length; // Siempre saltar al último (nuevo)
+    } else {
+        t.resultados[idx] = valor;
+        let idxInicioRonda = (vueltaJuezActiva - 1) * torneoAdmin.platos_por_serie;
+        let idxFinRonda = vueltaJuezActiva * torneoAdmin.platos_por_serie;
+        let siguientePendiente = -1;
+        for(let i = idxInicioRonda; i < idxFinRonda; i++) { if(t.resultados[i] === null) { siguientePendiente = i; break; } }
+        if (siguientePendiente !== -1) { juezPlatoSeleccionadoIdx = siguientePendiente; } else { juezPlatoSeleccionadoIdx = Math.min(idx + 1, idxFinRonda - 1); }
+    }
+    
+    t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
+    renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
+    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
 }
 
-function renderizarAdminBaseDatos() {
+window.toggleAusente = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.ausente = !t.ausente; await clienteSupabase.from('inscripciones').update({ ausente: t.ausente }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarStats(); renderizarAdminBaseDatosTorneo(); avisarALaTV(); } }
+window.guardarBarrage = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.barrage = parseInt(document.getElementById(`input-barrage-${id}`).value) || 0; t.puntajeFinal = t.totalAciertos + t.barrage; await clienteSupabase.from('inscripciones').update({ barrage: t.barrage }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); avisarALaTV(); } }
+
+function renderizarAdminBaseDatosTorneo() {
     const tbody = document.getElementById('lista-edicion-tiradores'); if (!tbody || !torneoAdmin) return; tbody.innerHTML = '';
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000 };
+    const paralelosDefinidos = torneoAdmin.paralelos || [];
     [...tiradoresLocales].sort((a, b) => a.orden - b.orden).forEach(row => {
         let catClass = row.categoria.toLowerCase().includes('vet') ? 'supervet' : (row.categoria.toLowerCase().includes('junior') ? 'junior' : (row.categoria.toLowerCase().includes('principiante') ? 'principiante' : ''));
-        tbody.innerHTML += `<tr style="${row.ausente ? 'opacity: 0.6;' : ''}"><td><strong>${row.orden}</strong></td><td style="font-weight: bold; text-transform: uppercase;">${row.ausente ? `<span style="color:var(--danger); font-weight:bold;">[AUS]</span> ${row.tirador}` : row.tirador}</td><td><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td><td><span class="tag-paralelo">P1</span> <span class="tag-paralelo">P2</span></td><td style="color: white; font-weight: bold;">${row.ausente ? '-' : `$ ${(costos[row.categoria] || 0).toLocaleString('es-AR')}`}</td><td><button class="btn-outline" onclick="abrirModalEditar('${row.id}', '${row.tirador}', ${row.orden}, '${row.categoria}')">Editar</button> <button class="btn-outline-danger" onclick="eliminarTirador('${row.id}')">Eliminar</button></td></tr>`;
+        let paralelosInscriptos = row.paralelos_inscriptos || []; let htmlParalelos = ''; let extraCostos = 0;
+        if (paralelosDefinidos.length > 0) { paralelosDefinidos.forEach(p => { let participando = paralelosInscriptos.includes(p.nombre); if (participando) extraCostos += p.costo; let activeClass = participando ? 'active' : ''; htmlParalelos += `<span class="tag-paralelo ${activeClass}" onclick="toggleParaleloTirador('${row.id}', '${p.nombre}')" title="Costo: $${p.costo.toLocaleString('es-AR')}">${p.nombre}</span>`; }); } else { htmlParalelos = '<span style="color:#666; font-size:0.75rem;">Sin paralelos configurados</span>'; }
+        let totalCobrar = (costos[row.categoria] || 0) + extraCostos;
+        tbody.innerHTML += `<tr style="${row.ausente ? 'opacity: 0.6;' : ''}"><td><strong>${row.orden}</strong></td><td style="font-weight: bold; text-transform: uppercase;">${row.ausente ? `<span style="color:var(--danger); font-weight:bold;">[AUS]</span> ${row.tirador}` : row.tirador}</td><td><span class="tag-categoria ${catClass}">${row.categoria.toUpperCase()}</span></td><td>${htmlParalelos}</td><td style="color: white; font-weight: bold;">${row.ausente ? '-' : `$ ${totalCobrar.toLocaleString('es-AR')}`}</td><td><button class="btn-outline" onclick="abrirModalEditar('${row.id}', '${row.tirador}', ${row.orden}, '${row.categoria}')">Editar</button> <button class="btn-outline-danger" onclick="eliminarTirador('${row.id}')">Eliminar</button></td></tr>`;
     });
 }
 
 window.exportarExcel = function() {
     if (!torneoAdmin || tiradoresLocales.length === 0) return mostrarAlerta("No hay datos para exportar.");
     const datos = [...tiradoresLocales].sort((a, b) => b.puntajeFinal - a.puntajeFinal || b.barrage - a.barrage || b.totalAciertos - a.totalAciertos || a.orden - b.orden).map((t, i) => {
-        let fila = { 'POS': t.ausente ? '-' : i + 1, 'ORDEN': t.orden, 'TIRADOR': t.tirador, 'CAT': t.categoria, 'ESTADO': t.ausente ? 'AUSENTE' : 'PRESENTE' };
-        for(let j=0; j<torneoAdmin.platos_por_serie; j++) fila[`P${j+1}`] = t.resultados[j] === 1 ? 'A' : (t.resultados[j] === 0 ? 'F' : '-');
+        let fila = { 'POS': t.ausente ? '-' : i + 1, 'ORDEN': t.orden, 'TIRADOR': t.tirador, 'CAT': t.categoria, 'ESTADO': t.ausente ? 'AUSENTE' : 'PRESENTE', 'PARALELOS': (t.paralelos_inscriptos || []).join(' - ') };
+        for(let j=0; j<(torneoAdmin.modo_sin_limite ? t.resultados.length : (torneoAdmin.platos_por_serie*(torneoAdmin.vueltas||1))); j++) fila[`P${j+1}`] = t.resultados[j] === 1 ? 'A' : (t.resultados[j] === 0 ? 'F' : '-');
         fila['TOTAL'] = t.ausente ? '-' : t.totalAciertos; fila['BARRAGE'] = t.ausente ? '-' : (t.barrage || 0); fila['FINAL'] = t.ausente ? '-' : t.puntajeFinal; return fila;
     });
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), "Resultados"); XLSX.writeFile(wb, `Resultados_${torneoAdmin.nombre.replace(/ /g, '_')}.xlsx`);
 }
 
 function avisarALaTV() { canalRealtime.send({ type: 'broadcast', event: 'recargar_pantallas', payload: {} }); }
-
-window.togglePlato = async function(idRow, idx, html) {
-    let t = tiradoresLocales.find(x => x.id === idRow); if(t.ausente) return;
-    t.resultados[idx] = t.resultados[idx] === null ? 1 : (t.resultados[idx] === 1 ? 0 : null);
-    t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
-    renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
-    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
-}
-
 window.abrirModalEditar = function(id, nom, ord, cat) { document.getElementById('edit-id').value = id; document.getElementById('edit-tirador').value = nom; document.getElementById('edit-orden').value = ord; document.getElementById('edit-categoria').value = cat; document.getElementById('modal-editar').style.display = 'flex'; }
 window.cerrarModalEditar = () => document.getElementById('modal-editar').style.display = 'none';
-
-window.guardarEdicionTirador = async function() {
-    let nuevoOrden = parseInt(document.getElementById('edit-orden').value); let idActual = document.getElementById('edit-id').value;
-    if (tiradoresLocales.some(t => t.orden === nuevoOrden && t.id !== idActual)) return mostrarAlerta(`El Nº ${nuevoOrden} ya está asignado.`);
-    await clienteSupabase.from('inscripciones').update({ tirador: document.getElementById('edit-tirador').value, orden: nuevoOrden, categoria: document.getElementById('edit-categoria').value }).eq('id', idActual);
-    cerrarModalEditar(); await cargarResultados(torneoAdmin.id); avisarALaTV();
-}
+window.guardarEdicionTirador = async function() { let nuevoOrden = parseInt(document.getElementById('edit-orden').value); let idActual = document.getElementById('edit-id').value; if (tiradoresLocales.some(t => t.orden === nuevoOrden && t.id !== idActual)) return mostrarAlerta(`El Nº ${nuevoOrden} ya está asignado.`); await clienteSupabase.from('inscripciones').update({ tirador: document.getElementById('edit-tirador').value, orden: nuevoOrden, categoria: document.getElementById('edit-categoria').value }).eq('id', idActual); cerrarModalEditar(); await cargarResultados(torneoAdmin.id); avisarALaTV(); }
 
 window.agregarTirador = async function() {
-    let orden = parseInt(document.getElementById('input-orden').value); let tirador = document.getElementById('input-tirador').value;
+    let orden = parseInt(document.getElementById('input-orden').value); let tirador = document.getElementById('input-tirador').value.trim(); let categoria = document.getElementById('input-categoria').value;
     if(!orden || !tirador) return mostrarAlerta("Faltan datos.");
-    if (tiradoresLocales.some(t => t.orden === orden)) return mostrarAlerta(`El Nº ${orden} ya existe.`);
-    await clienteSupabase.from('inscripciones').insert([{ torneo_id: torneoAdmin.id, orden: orden, tirador: tirador, categoria: document.getElementById('input-categoria').value, resultados: Array(torneoAdmin.platos_por_serie).fill(null), barrage: 0, ausente: false }]);
+    if (tiradoresLocales.some(t => t.orden === orden)) return mostrarAlerta(`El Nº ${orden} ya existe en este torneo.`);
+    let resInicial = torneoAdmin.modo_sin_limite ? [] : Array(torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)).fill(null);
+    await clienteSupabase.from('inscripciones').insert([{ torneo_id: torneoAdmin.id, orden: orden, tirador: tirador, categoria: categoria, resultados: resInicial, barrage: 0, ausente: false, paralelos_inscriptos: [] }]);
+    if (!tiradoresMaster.some(t => t.nombre.toLowerCase() === tirador.toLowerCase())) { await clienteSupabase.from('tiradores').insert([{ nombre: tirador, categoria: categoria }]); await cargarMasterDB(); }
     document.getElementById('input-orden').value = ''; document.getElementById('input-tirador').value = ''; await cargarResultados(torneoAdmin.id); avisarALaTV();
 }
 
 window.eliminarTirador = function(id) { mostrarConfirmacion("¿Eliminar tirador?", async () => { await clienteSupabase.from('inscripciones').delete().eq('id', id); await cargarResultados(torneoAdmin.id); avisarALaTV(); }); }
 
-// ==========================================
-// CREACIÓN Y EDICIÓN DE TORNEOS CON DISCIPLINA
-// ==========================================
 window.crearTorneo = async function() {
-    const n = document.getElementById('input-nuevo-torneo').value; 
-    const f = document.getElementById('input-fecha-torneo').value; 
-    
-    const disc = document.getElementById('input-disciplina').value;
-    const pSel = document.getElementById('input-platos').value;
-    const pCust = document.getElementById('input-platos-custom').value;
-    const grupo = document.getElementById('input-grupo-size').value;
-    
-    let pFinal = (pSel === 'Personalizado') ? parseInt(pCust) : parseInt(pSel);
+    const n = document.getElementById('input-nuevo-torneo').value; const f = document.getElementById('input-fecha-torneo').value; const disc = document.getElementById('input-disciplina').value; const pSel = document.getElementById('input-platos').value; const pCust = document.getElementById('input-platos-custom').value; const grupo = document.getElementById('input-grupo-size').value; const vueltas = document.getElementById('input-vueltas').value;
+    let modoSinLimite = (pSel === 'SinLímite');
+    let pFinal = modoSinLimite ? 0 : ((pSel === 'Personalizado') ? parseInt(pCust) : parseInt(pSel));
     let gFinal = (disc === 'Plato') ? parseInt(grupo) : 1;
-
-    if (!n || !f || !pFinal || pFinal <= 0) return mostrarAlerta("Nombre, fecha y cantidad de blancos son OBLIGATORIOS.");
+    let vFinal = modoSinLimite ? 1 : parseInt(vueltas);
+    if (!n || !f || (!modoSinLimite && (isNaN(pFinal) || pFinal <= 0))) return mostrarAlerta("Nombre, fecha y cantidad de blancos son OBLIGATORIOS.");
     
     let c = { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
     if (listaTorneos.length > 0 && listaTorneos[listaTorneos.length - 1].costos) c = JSON.parse(JSON.stringify(listaTorneos[listaTorneos.length - 1].costos));
     
-    await clienteSupabase.from('torneos').insert([{ 
-        nombre: n, fecha: f, 
-        platos_por_serie: pFinal, estado: 'Inactivo', costos: c, tirador_actual_index: 0,
-        disciplina: disc, tamano_grupo: gFinal
-    }]);
-    
+    await clienteSupabase.from('torneos').insert([{ nombre: n, fecha: f, platos_por_serie: pFinal, estado: 'Inactivo', costos: c, tirador_actual_index: 0, disciplina: disc, tamano_grupo: gFinal, paralelos: [], vueltas: vFinal, modo_sin_limite: modoSinLimite }]);
     document.getElementById('input-nuevo-torneo').value = ''; document.getElementById('input-fecha-torneo').value = ''; await inicializarDatos(); avisarALaTV();
 }
 
 window.editarTorneoActual = async function() {
     const f = document.getElementById('edit-fecha-torneo').value; if (!f) return mostrarAlerta("La fecha no puede quedar vacía.");
-    
-    const disc = document.getElementById('edit-disciplina').value;
-    const pSel = document.getElementById('edit-platos').value;
-    const pCust = document.getElementById('edit-platos-custom').value;
-    const grupo = document.getElementById('edit-grupo-size').value;
-    
-    let pFinal = (pSel === 'Personalizado') ? parseInt(pCust) : parseInt(pSel);
+    const disc = document.getElementById('edit-disciplina').value; const pSel = document.getElementById('edit-platos').value; const pCust = document.getElementById('edit-platos-custom').value; const grupo = document.getElementById('edit-grupo-size').value; const vueltas = document.getElementById('edit-vueltas').value;
+    let modoSinLimite = (pSel === 'SinLímite');
+    let pFinal = modoSinLimite ? 0 : ((pSel === 'Personalizado') ? parseInt(pCust) : parseInt(pSel));
     let gFinal = (disc === 'Plato') ? parseInt(grupo) : 1;
-
-    await clienteSupabase.from('torneos').update({ 
-        nombre: document.getElementById('edit-nombre-torneo').value, 
-        fecha: f, platos_por_serie: pFinal,
-        disciplina: disc, tamano_grupo: gFinal
-    }).eq('id', torneoAdmin.id);
+    let vFinal = modoSinLimite ? 1 : parseInt(vueltas);
     
+    await clienteSupabase.from('torneos').update({ nombre: document.getElementById('edit-nombre-torneo').value, fecha: f, platos_por_serie: pFinal, disciplina: disc, tamano_grupo: gFinal, vueltas: vFinal, modo_sin_limite: modoSinLimite }).eq('id', torneoAdmin.id);
     await inicializarDatos(); avisarALaTV(); mostrarAlerta('Torneo actualizado.');
 }
 
-window.eliminarTorneoActual = function() {
-    mostrarConfirmacion("¿ELIMINAR torneo completo y TODOS sus tiradores?", async () => {
-        await clienteSupabase.from('inscripciones').delete().eq('torneo_id', torneoAdmin.id); await clienteSupabase.from('torneos').delete().eq('id', torneoAdmin.id);
-        torneoAdmin = null; await inicializarDatos(); avisarALaTV();
-    });
-}
+window.eliminarTorneoActual = function() { mostrarConfirmacion("¿ELIMINAR torneo completo y TODOS sus tiradores?", async () => { await clienteSupabase.from('inscripciones').delete().eq('torneo_id', torneoAdmin.id); await clienteSupabase.from('torneos').delete().eq('id', torneoAdmin.id); torneoAdmin = null; await inicializarDatos(); avisarALaTV(); }); }
 
-canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async () => {
-    if (!esAdmin) {
-        if (torneoTV) {
-            const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single();
-            if (data) torneoTV = data; cargarResultados(torneoTV.id);
-        } else inicializarDatos(); 
-    }
-}).subscribe();
+canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async () => { if (!esAdmin) { if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos(); } }).subscribe();
 document.addEventListener('DOMContentLoaded', verificarSesion);

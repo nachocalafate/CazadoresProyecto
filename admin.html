@@ -39,7 +39,6 @@
                 <input type="text" class="search-resultados" placeholder="🔍 Buscar tirador o categoría..." onkeyup="setFiltroBusqueda(this.value)">
             </div>
             <div class="cat-filters" id="filtros-cat-admin"></div>
-            
             <div class="table-container">
                 <table id="tabla-resultados-admin" style="width: 100%;">
                     <thead id="cabecera-tabla-admin"></thead>
@@ -53,7 +52,7 @@
             <div id="contenedor-pedana-admin"></div>
             <div style="text-align: center; margin-top: 40px; gap: 20px; display: flex; justify-content: center;">
                 <button class="btn-outline" onclick="cambiarPedana(-1)" style="font-size: 1.1rem; padding: 10px 30px;">Llamar anterior</button>
-                <button onclick="cambiarPedana(1)" style="font-size: 1.1rem; padding: 10px 30px; background-color: var(--accent); color: black;">Llamar al siguiente</button>
+                <button onclick="cambiarPedana(1)" style="font-size: 1.1rem; padding: 10px 30px; background-color: var(--accent); color: white;">Llamar al siguiente</button>
             </div>
         </div>
 
@@ -68,7 +67,6 @@
                 <div class="juez-sidebar" style="overflow-y: hidden; display: flex; flex-direction: column; height: 70vh;">
                     <div style="flex-shrink: 0; padding-bottom: 10px;">
                         <div class="titulo-amarillo" style="display: block; text-align: center; border-radius: 4px;">TIRADORES</div>
-                        <!-- Selector de grupos/escuadras para Plato -->
                         <div id="contenedor-grupos-jueces" style="display: none; margin-top: 10px;">
                             <label style="font-size: 0.8rem; color: #AAA;">Filtrar Escuadra / Grupo:</label>
                             <select id="select-grupo-jueces" onchange="cambiarGrupoJueces()" style="width: 100%; box-sizing: border-box; margin-bottom: 5px;"></select>
@@ -84,123 +82,170 @@
             </div>
         </div>
 
-        <!-- PESTAÑA: BASE DE DATOS -->
+        <!-- PESTAÑA: BASE DE DATOS MAESTRA -->
         <div id="tab-bd" class="tab-pane">
-            <div style="display: flex; justify-content: space-between; align-items: flex-end;">
-                <div class="titulo-amarillo">TIRADORES DEL TORNEO</div>
-                <button onclick="exportarExcel()" style="background-color: #107C41; margin-bottom: 10px;">Descargar Excel</button>
+            <div class="titulo-amarillo" style="margin-bottom: 20px;">BASE DE DATOS HISTÓRICA DE TIRADORES</div>
+            <div class="admin-panel">
+                <h3 style="margin-bottom: 15px;">Registrar Nuevo Tirador en el Sistema</h3>
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <input type="text" id="input-master-nombre" placeholder="Apellido, Nombre" style="flex: 1;">
+                    <select id="input-master-categoria" style="width: 200px;"></select>
+                    <button onclick="guardarTiradorMaster()" style="background-color: var(--success);">Guardar en Sistema</button>
+                </div>
             </div>
+            <input type="text" id="buscador-master" placeholder="🔍 Buscar tirador para agregar al torneo actual..." onkeyup="renderizarMaster()" style="width: 100%; box-sizing: border-box; margin-bottom: 15px; padding: 12px; font-size: 1.1rem;">
             <div class="table-container bd-container">
                 <table class="bd-table">
-                    <thead><tr><th>Nº</th><th>TIRADOR</th><th>CAT.</th><th>PARALELOS</th><th>A COBRAR</th><th>ACCIONES</th></tr></thead>
-                    <tbody id="lista-edicion-tiradores"></tbody>
+                    <thead><tr><th>TIRADOR</th><th>CAT. HABITUAL</th><th>ACCIONES</th></tr></thead>
+                    <tbody id="tbody-master"></tbody>
                 </table>
-            </div>
-
-            <div class="admin-panel" style="margin-top: 20px;">
-                <h3>Agregar Tirador</h3>
-                <div style="display: flex; gap: 10px; width: 100%;">
-                    <input type="number" id="input-orden" placeholder="Nº" style="width: 70px;">
-                    <input type="text" id="input-tirador" placeholder="Apellido, Nombre" style="flex: 1;">
-                    <select id="input-categoria"></select>
-                    <button onclick="agregarTirador()">Agregar</button>
-                </div>
-            </div>
-
-            <div class="admin-panel" style="margin-top: 20px;">
-                <h3 style="background-color: var(--accent); color: black; display: inline-block; padding: 5px 15px; border-radius: 4px;">COSTOS DE INSCRIPCIÓN</h3>
-                
-                <div style="background-color: #0A0A0A; border: 1px solid var(--border); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 15px; margin-bottom: 25px;">
-                    <h4 style="margin-top: 0; color: white; margin-bottom: 15px; font-size: 0.95rem;">⚙️ CONFIGURACIÓN GENERAL</h4>
-                    <div id="contenedor-sistema-costos" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
-                </div>
-                
-                <h4 style="margin-top: 0; color: white; margin-bottom: 10px; font-size: 0.95rem;">🎯 VALORES POR CATEGORÍA</h4>
-                <div id="contenedor-inputs-costos" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;"></div>
-                
-                <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; border-top: 1px solid var(--border); padding-top: 15px;">
-                    <input type="text" id="input-nueva-cat" placeholder="Nombre nueva categoría..." style="width: 250px; box-sizing: border-box;">
-                    <button class="btn-outline" onclick="agregarCategoriaConfig()">+ Agregar Categoría</button>
-                </div>
-                
-                <div>
-                    <button onclick="guardarCostos()" style="background-color: var(--success); display: inline-block; padding: 10px 30px;">Guardar Costos</button>
-                </div>
             </div>
         </div>
 
-        <!-- PESTAÑA: TORNEOS -->
+        <!-- PESTAÑA: TORNEOS Y COSTOS -->
         <div id="tab-torneos" class="tab-pane">
             <div style="display: flex; flex-direction: column; gap: 20px;">
+                
+                <!-- Opciones de torneo actual -->
                 <div class="admin-panel" style="margin-bottom: 0;">
                     <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Opciones del Torneo Seleccionado</h3>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="edit-nombre-torneo" style="flex: 1; margin: 0; box-sizing: border-box;" placeholder="Nombre del torneo">
                         <input type="date" id="edit-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
                         
-                        <select id="edit-disciplina" onchange="cambiarDisciplinaUi('edit')" style="width: 120px; margin: 0;">
-                            <option value="Helice">Hélice</option>
-                            <option value="Plato">Plato</option>
-                        </select>
-                        
-                        <select id="edit-platos" onchange="cambiarPlatosPersonalizado('edit')" style="width: 130px; margin: 0;"></select>
-                        <input type="number" id="edit-platos-custom" placeholder="Cant." style="width: 80px; margin: 0; display: none;">
-                        
-                        <div id="edit-grupo-container" style="display: none; align-items: center; gap: 5px;">
-                            <label style="color: white; font-size: 0.85rem;">Tiradores por Escuadra:</label>
-                            <input type="number" id="edit-grupo-size" style="width: 60px; margin: 0;" value="1">
+                        <div style="display: flex; align-items: center; gap: 5px; background: #111; padding: 5px 10px; border-radius: 4px; border: 1px solid #333;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Disciplina:</label>
+                            <select id="edit-disciplina" onchange="cambiarDisciplinaUi('edit')" style="margin: 0; padding: 5px; font-size: 0.9rem;">
+                                <option value="Helice">Hélice</option>
+                                <option value="Plato">Plato</option>
+                            </select>
                         </div>
 
-                        <button onclick="editarTorneoActual()" style="background-color: #2EA043; color: white; padding: 12px 20px;">Guardar Cambios</button>
-                        <button onclick="eliminarTorneoActual()" style="background-color: #F85149; color: white; padding: 12px 20px;">Eliminar Torneo</button>
-                    </div>
+                        <div style="display: flex; align-items: center; gap: 5px; background: #111; padding: 5px 10px; border-radius: 4px; border: 1px solid #333;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Rondas/Vueltas:</label>
+                            <input type="number" id="edit-vueltas" style="width: 60px; margin: 0; padding: 5px; font-size: 0.9rem;" value="1" min="1">
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 5px; background: #111; padding: 5px 10px; border-radius: 4px; border: 1px solid #333;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Objetivos p/ronda:</label>
+                            <select id="edit-platos" onchange="cambiarPlatosPersonalizado('edit')" style="margin: 0; padding: 5px; font-size: 0.9rem;"></select>
+                            <input type="number" id="edit-platos-custom" placeholder="Cant." style="width: 60px; margin: 0; padding: 5px; font-size: 0.9rem; display: none;">
+                        </div>
+                        
+                        <div id="edit-grupo-container" style="display: none; align-items: center; gap: 5px; background: #111; padding: 5px 10px; border-radius: 4px; border: 1px solid #333;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Tiradores p/Escuadra:</label>
+                            <input type="number" id="edit-grupo-size" style="width: 60px; margin: 0; padding: 5px; font-size: 0.9rem;" value="1">
+                        </div>
 
+                        <button onclick="editarTorneoActual()" style="background-color: #2EA043; color: white; padding: 10px 15px;">Guardar Cambios</button>
+                        <button onclick="eliminarTorneoActual()" style="background-color: #F85149; color: white; padding: 10px 15px;">Eliminar Torneo</button>
+                    </div>
                     <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--border);">
                         <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 1rem; color: white;">Estado de Transmisión</h4>
-                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Al marcarlo "En Curso", aparecerá un cartel rojo titilando en la pantalla principal de los usuarios.</p>
                         <button id="btn-estado-torneo" onclick="toggleEstadoTorneoActual()" style="padding: 10px 25px; font-weight: bold;">Cargando estado...</button>
                     </div>
                 </div>
 
+                <!-- Paralelos -->
+                <div class="admin-panel" style="margin-bottom: 0;">
+                    <h3 style="background-color: #3b82f6; color: white; display: inline-block; padding: 5px 15px; border-radius: 4px; margin-top: 0;">TORNEOS PARALELOS</h3>
+                    <div id="lista-paralelos" style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;"></div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="text" id="input-nuevo-paralelo-nombre" placeholder="Nombre (Ej: P1)" style="width: 150px;">
+                        <input type="number" id="input-nuevo-paralelo-costo" placeholder="Costo ($)" style="width: 150px;">
+                        <button class="btn-outline" onclick="agregarParalelo()">+ Agregar Paralelo</button>
+                    </div>
+                </div>
+
+                <!-- Costos de inscripción -->
+                <div class="admin-panel" style="margin-bottom: 0;">
+                    <h3 style="background-color: var(--accent); color: white; display: inline-block; padding: 5px 15px; border-radius: 4px; margin-top: 0;">COSTOS DE INSCRIPCIÓN DEL TORNEO ACTUAL</h3>
+                    <div style="background-color: #0A0A0A; border: 1px solid var(--border); border-left: 4px solid var(--accent-yellow); border-radius: 6px; padding: 15px; margin-bottom: 25px;">
+                        <h4 style="margin-top: 0; color: white; margin-bottom: 15px; font-size: 0.95rem;">⚙️ CONFIGURACIÓN GENERAL</h4>
+                        <div id="contenedor-sistema-costos" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;"></div>
+                    </div>
+                    <h4 style="margin-top: 0; color: white; margin-bottom: 10px; font-size: 0.95rem;">🎯 VALORES POR CATEGORÍA</h4>
+                    <div id="contenedor-inputs-costos" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 15px;"></div>
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; align-items: center; border-top: 1px solid var(--border); padding-top: 15px;">
+                        <input type="text" id="input-nueva-cat" placeholder="Nombre nueva categoría..." style="width: 250px; box-sizing: border-box;">
+                        <button class="btn-outline" onclick="agregarCategoriaConfig()">+ Agregar Categoría</button>
+                    </div>
+                    <div><button onclick="guardarCostos()" style="background-color: var(--success); display: inline-block; padding: 10px 30px;">Guardar Costos</button></div>
+                </div>
+
+                <!-- Tabla de Tiradores del Torneo Actual -->
+                <div style="background-color: var(--bg-panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px;">
+                        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-main);">TIRADORES INSCRIPTOS EN EL TORNEO ACTUAL</h3>
+                        <button onclick="exportarExcel()" style="background-color: #107C41;">Descargar Excel</button>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px; background: #111; padding: 15px; border-radius: 6px; align-items: center;">
+                        <input type="number" id="input-orden" placeholder="Nº Orden" style="width: 100px;">
+                        <input type="text" id="input-tirador" placeholder="Apellido, Nombre (Agregar manual)" style="flex: 1;">
+                        <select id="input-categoria" style="width: 150px;"></select>
+                        <button onclick="agregarTirador()">Inscribir Manual</button>
+                        
+                        <!-- IMPORTAR EXCEL -->
+                        <div style="border-left: 1px solid #444; padding-left: 15px; display: flex; align-items: center; gap: 10px;">
+                            <label for="importar-excel" style="background-color: #2EA043; color: white; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center;">
+                                📁 Importar Excel
+                            </label>
+                            <input type="file" id="importar-excel" accept=".xlsx, .xls" style="display: none;" onchange="importarExcelDesdeArchivo(event)">
+                        </div>
+                    </div>
+
+                    <div class="table-container bd-container">
+                        <table class="bd-table">
+                            <thead><tr><th>Nº</th><th>TIRADOR</th><th>CAT.</th><th>PARALELOS</th><th>A COBRAR</th><th>ACCIONES</th></tr></thead>
+                            <tbody id="lista-edicion-tiradores"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Crear torneo -->
                 <div class="admin-panel" style="margin-bottom: 0;">
                     <h3 style="margin-bottom: 15px; font-size: 1.1rem; color: var(--text-main);">Crear Nuevo Torneo</h3>
                     <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="input-nuevo-torneo" placeholder="Ej: Torneo Social" style="flex: 1; margin: 0; box-sizing: border-box;">
                         <input type="date" id="input-fecha-torneo" style="width: 150px; margin: 0; box-sizing: border-box;">
                         
-                        <select id="input-disciplina" onchange="cambiarDisciplinaUi('input')" style="width: 120px; margin: 0;">
-                            <option value="Helice" selected>Hélice</option>
-                            <option value="Plato">Plato</option>
-                        </select>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Disciplina:</label>
+                            <select id="input-disciplina" onchange="cambiarDisciplinaUi('input')" style="width: 100px; margin: 0; padding: 8px;">
+                                <option value="Helice" selected>Hélice</option>
+                                <option value="Plato">Plato</option>
+                            </select>
+                        </div>
                         
-                        <select id="input-platos" onchange="cambiarPlatosPersonalizado('input')" style="width: 130px; margin: 0;"></select>
-                        <input type="number" id="input-platos-custom" placeholder="Cant." style="width: 80px; margin: 0; display: none;">
-                        
-                        <div id="input-grupo-container" style="display: none; align-items: center; gap: 5px;">
-                            <label style="color: white; font-size: 0.85rem;">Tiradores por Escuadra:</label>
-                            <input type="number" id="input-grupo-size" style="width: 60px; margin: 0;" value="5">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Vueltas:</label>
+                            <input type="number" id="input-vueltas" style="width: 60px; margin: 0; padding: 8px;" value="1" min="1">
                         </div>
 
-                        <button onclick="crearTorneo()" style="background-color: var(--accent); color: black; padding: 12px 30px;">Crear Torneo</button>
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <label style="font-size: 0.8rem; color: #AAA;">Obj. p/vuelta:</label>
+                            <select id="input-platos" onchange="cambiarPlatosPersonalizado('input')" style="width: 110px; margin: 0; padding: 8px;"></select>
+                            <input type="number" id="input-platos-custom" placeholder="Cant." style="width: 60px; margin: 0; padding: 8px; display: none;">
+                        </div>
+
+                        <div id="input-grupo-container" style="display: none; align-items: center; gap: 5px;">
+                            <label style="color: white; font-size: 0.85rem;">Escuadra:</label>
+                            <input type="number" id="input-grupo-size" style="width: 60px; margin: 0; padding: 8px;" value="5">
+                        </div>
+                        <button onclick="crearTorneo()" style="background-color: var(--accent); color: white; padding: 12px 20px;">Crear Torneo</button>
                     </div>
                 </div>
             </div>
         </div>
     </main>
 
-    <!-- Modales -->
     <div id="modal-editar" class="modal"><div class="modal-content"><h2 style="margin-top: 0;">Editar Tirador</h2><input type="hidden" id="edit-id"><label>Nº Orden</label><input type="number" id="edit-orden" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Apellido y Nombre</label><input type="text" id="edit-tirador" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Categoría</label><select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select><div style="display: flex; gap: 10px;"><button onclick="guardarEdicionTirador()" style="flex: 1; background-color: var(--success);">Guardar</button><button class="btn-outline" onclick="cerrarModalEditar()" style="flex: 1;">Cancelar</button></div></div></div>
+    <div id="modal-editar-master" class="modal"><div class="modal-content"><h2 style="margin-top: 0;">Editar Base Histórica</h2><input type="hidden" id="edit-master-id"><label>Apellido y Nombre</label><input type="text" id="edit-master-nombre" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Categoría Habitual</label><select id="edit-master-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select><div style="display: flex; gap: 10px;"><button onclick="guardarEdicionMaster()" style="flex: 1; background-color: var(--success);">Guardar</button><button class="btn-outline" onclick="cerrarModalEditarMaster()" style="flex: 1;">Cancelar</button></div></div></div>
     <div id="modal-alerta" class="modal"><div class="modal-content" style="text-align: center; max-width: 350px;"><h3 id="alerta-mensaje" style="margin-top: 0; color: white;">Mensaje</h3><button onclick="cerrarAlerta()" style="width: 100%; margin-top: 15px;">OK</button></div></div>
     <div id="modal-confirm" class="modal"><div class="modal-content" style="text-align: center; max-width: 400px;"><h3 id="confirm-mensaje" style="margin-top: 0; color: white; font-size: 1.1rem; line-height: 1.4;">¿Estás seguro?</h3><div style="display: flex; gap: 10px; margin-top: 25px;"><button id="btn-confirm-ok" style="flex: 1; background-color: var(--danger); color: white;">Confirmar</button><button class="btn-outline" onclick="cerrarConfirmacion()" style="flex: 1;">Cancelar</button></div></div></div>
 
     <script src="app.js"></script>
-    <script>
-        // Inicializar los menús desplegables apenas carga el panel
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof cambiarDisciplinaUi === 'function') {
-                cambiarDisciplinaUi('input');
-            }
-        });
-    </script>
+    <script> document.addEventListener('DOMContentLoaded', () => { if (typeof cambiarDisciplinaUi === 'function') cambiarDisciplinaUi('input'); }); </script>
 </body>
 </html>
