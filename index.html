@@ -36,13 +36,21 @@
                 <h1 class="inicio-titulo">TORNEOS <span>DISPONIBLES</span></h1>
                 <div class="inicio-titulo-barra"></div>
             </div>
-            <div class="buscador-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-                <input type="text" id="buscador-torneos-publico" class="buscador-publico" placeholder="Buscar" onkeyup="renderizarTarjetasInicio()">
-            </div>
         </div>
 
         <div id="grid-torneos-publicos" class="torneos-grid"></div>
+
+        <!-- Torneos anteriores (aparece solo si hay más de 4) -->
+        <div id="seccion-anteriores" style="display: none;">
+            <div class="anteriores-cab">
+                <h2 class="anteriores-titulo">TORNEOS ANTERIORES <span id="contador-anteriores"></span></h2>
+                <div class="buscador-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+                    <input type="text" id="buscador-torneos-publico" class="buscador-publico" placeholder="Buscar por nombre o fecha..." oninput="renderizarTarjetasInicio()" autocomplete="off">
+                </div>
+            </div>
+            <div id="lista-torneos-anteriores" class="lista-torneos"></div>
+        </div>
     </div>
     <!-- VISTA PANTALLA TV (Pública) -->
     <div id="vista-tv" style="display: none;">

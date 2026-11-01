@@ -232,17 +232,15 @@
                         <button onclick="exportarExcel()" style="background-color: #107C41;">Descargar Excel</button>
                     </div>
 
-                    <div style="display: flex; gap: 10px; width: 100%; margin-bottom: 15px; background: #111; padding: 15px; border-radius: 6px; align-items: center;">
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; width: 100%; box-sizing: border-box; margin-bottom: 15px; background: #111; padding: 15px; border-radius: 6px; align-items: center;">
                         <input type="number" id="input-orden" placeholder="Nº Orden" style="width: 100px;">
-                        <input type="text" id="input-tirador" placeholder="Apellido, Nombre (Agregar manual)" style="flex: 1;">
+                        <input type="text" id="input-tirador" placeholder="Apellido, Nombre (Agregar manual)" style="flex: 1; min-width: 200px; box-sizing: border-box;">
                         <select id="input-categoria" style="width: 150px;"></select>
                         <button onclick="agregarTirador()">Inscribir Manual</button>
                         
                         <!-- IMPORTAR EXCEL -->
-                        <div style="border-left: 1px solid #444; padding-left: 15px; display: flex; align-items: center; gap: 10px;">
-                            <label for="importar-excel" style="background-color: #2EA043; color: white; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center;">
-                                📁 Importar Excel
-                            </label>
+                        <div style="border-left: 1px solid #444; padding-left: 15px; display: flex; align-items: center;">
+                            <button type="button" onclick="document.getElementById('importar-excel').click()" style="background-color: #2EA043; white-space: nowrap;">📁 Importar Excel</button>
                             <input type="file" id="importar-excel" accept=".xlsx, .xls" style="display: none;" onchange="importarExcelDesdeArchivo(event)">
                         </div>
                     </div>
@@ -258,6 +256,16 @@
         </div>
     </main>
 
+    <div id="modal-torneos-viejos" class="modal" onclick="if(event.target===this) cerrarModalTorneosViejos()"><div class="modal-content" style="max-width: 640px;"><h2 style="margin-top: 0; color: var(--accent-yellow);">Torneos anteriores</h2><input type="text" id="buscador-torneos-viejos" placeholder="🔍 Buscar por nombre o fecha..." oninput="renderizarListaTorneosViejos()" autocomplete="off" style="width: 100%; box-sizing: border-box; margin-bottom: 12px;"><div id="lista-torneos-viejos" class="lista-torneos" style="max-height: 50vh;"></div><button class="btn-outline" onclick="cerrarModalTorneosViejos()" style="width: 100%; margin-top: 15px; padding: 10px;">Cerrar</button></div></div>
+    <div id="modal-orden" class="modal" onclick="if(event.target===this) cerrarModalOrden()"><div class="modal-content modal-orden-box">
+        <div class="orden-eyebrow">AGREGAR AL TORNEO</div>
+        <h2 id="orden-nombre" class="orden-nombre"></h2>
+        <div class="orden-meta"><span id="orden-cat" class="tag-categoria"></span><span id="orden-torneo"></span></div>
+        <label for="orden-input" class="orden-label">Nº de orden (turno)</label>
+        <input type="number" id="orden-input" min="1" onkeydown="if(event.key==='Enter') confirmarModalOrden(); else if(event.key==='Escape') cerrarModalOrden();">
+        <p id="orden-error" class="orden-error"></p>
+        <div style="display: flex; gap: 10px;"><button id="orden-ok" onclick="confirmarModalOrden()" style="flex: 1; background-color: var(--success);">Agregar al torneo</button><button class="btn-outline" onclick="cerrarModalOrden()" style="flex: 1; padding: 10px;">Cancelar</button></div>
+    </div></div>
     <div id="modal-editar" class="modal"><div class="modal-content"><h2 style="margin-top: 0;">Editar Tirador</h2><input type="hidden" id="edit-id"><label>Nº Orden</label><input type="number" id="edit-orden" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Apellido y Nombre</label><input type="text" id="edit-tirador" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Categoría</label><select id="edit-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select><div style="display: flex; gap: 10px;"><button onclick="guardarEdicionTirador()" style="flex: 1; background-color: var(--success);">Guardar</button><button class="btn-outline" onclick="cerrarModalEditar()" style="flex: 1;">Cancelar</button></div></div></div>
     <div id="modal-editar-master" class="modal"><div class="modal-content"><h2 style="margin-top: 0;">Editar Base Histórica</h2><input type="hidden" id="edit-master-id"><label>Apellido y Nombre</label><input type="text" id="edit-master-nombre" style="width: 100%; margin-bottom: 15px; box-sizing: border-box;"><label>Categoría Habitual</label><select id="edit-master-categoria" style="width: 100%; margin-bottom: 25px; box-sizing: border-box;"></select><div style="display: flex; gap: 10px;"><button onclick="guardarEdicionMaster()" style="flex: 1; background-color: var(--success);">Guardar</button><button class="btn-outline" onclick="cerrarModalEditarMaster()" style="flex: 1;">Cancelar</button></div></div></div>
     <div id="modal-alerta" class="modal"><div class="modal-content" style="text-align: center; max-width: 350px;"><h3 id="alerta-mensaje" style="margin-top: 0; color: white;">Mensaje</h3><button onclick="cerrarAlerta()" style="width: 100%; margin-top: 15px;">OK</button></div></div>
