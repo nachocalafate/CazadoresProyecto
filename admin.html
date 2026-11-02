@@ -21,6 +21,7 @@
                 <div id="reloj" class="reloj"></div>
                 <div id="fecha-top" class="fecha-top"></div>
             </div>
+            <span id="rol-badge" class="rol-badge" style="display: none;"></span>
             <a class="btn-admin-top" href="index.html" target="_blank">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 Ver Pantalla Pública
@@ -41,10 +42,10 @@
         <div class="tabs">
             <button class="tab-btn active" onclick="abrirPestana('tab-resultados', this)">Resultados</button>
             <button class="tab-btn" onclick="abrirPestana('tab-pedana', this)">Ver Tirador en Pedana</button>
-            <button class="tab-btn" onclick="abrirPestana('tab-stats', this)">Estadísticas</button>
+            <button class="tab-btn solo-admin" onclick="abrirPestana('tab-stats', this)">Estadísticas</button>
             <button class="tab-btn" onclick="abrirPestana('tab-jueces', this)">Jueces</button>
-            <button class="tab-btn" onclick="abrirPestana('tab-bd', this)">Base de Datos</button>
-            <button class="tab-btn" onclick="abrirPestana('tab-torneos', this)">Gestión de Torneos</button>
+            <button class="tab-btn solo-admin" onclick="abrirPestana('tab-bd', this)">Base de Datos</button>
+            <button class="tab-btn solo-admin" onclick="abrirPestana('tab-torneos', this)">Gestión de Torneos</button>
         </div>
 
         <!-- PESTAÑA: RESULTADOS -->
@@ -72,7 +73,7 @@
         </div>
 
         <!-- PESTAÑA: ESTADÍSTICAS -->
-        <div id="tab-stats" class="tab-pane">
+        <div id="tab-stats" class="tab-pane solo-admin">
             <div id="contenedor-stats"></div>
         </div>
 
@@ -98,7 +99,7 @@
         </div>
 
         <!-- PESTAÑA: BASE DE DATOS MAESTRA -->
-        <div id="tab-bd" class="tab-pane">
+        <div id="tab-bd" class="tab-pane solo-admin">
             <div class="titulo-amarillo" style="margin-bottom: 20px;">BASE DE DATOS HISTÓRICA DE TIRADORES</div>
             <div class="admin-panel">
                 <h3 style="margin-bottom: 15px;">Registrar Nuevo Tirador en el Sistema</h3>
@@ -118,7 +119,7 @@
         </div>
 
         <!-- PESTAÑA: TORNEOS Y COSTOS -->
-        <div id="tab-torneos" class="tab-pane">
+        <div id="tab-torneos" class="tab-pane solo-admin">
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 
                 <!-- Opciones del torneo + Crear torneo (mitad y mitad) -->

@@ -19,9 +19,62 @@ let filtroCategoria = 'Todas';
 let filtroBusqueda = '';
 let modoVistaTV = 'resultados'; 
 let modoTvActivo = false;
-let actividadTirador = {}; // id inscripción -> última vez que un juez lo puntuó (para modo sin límite)
 
 const canalRealtime = clienteSupabase.channel('sala-sincronizacion');
+
+let rolActual = null;                 // 'admin' | 'juez' (solo en admin.html)
+let tabAdminActiva = 'tab-resultados';
+let tiradoresTirando = new Set();     // ids de inscripción que algún juez/admin está puntuando ahora
+let canalListo = false; let presenciaUltima = '';
+
+// Quién está puntuando a quién: cada juez/admin publica su tirador abierto y todas las pantallas lo escuchan
+function calcularTirando() {
+    const obj = esAdmin ? torneoAdmin : torneoTV; const set = new Set(); if (!obj) return set;
+    let estado = {}; try { estado = canalRealtime.presenceState(); } catch (e) {}
+    Object.values(estado).forEach(metas => (metas || []).forEach(m => { if (m && m.tirador_id && String(m.torneo_id) === String(obj.id)) set.add(String(m.tirador_id)); }));
+    return set;
+}
+function redibujarResultados() {
+    if (esAdmin) { if (torneoAdmin) renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); }
+    else if (torneoTV) { renderizarVistaResultadosUnificada('cabecera-tabla-tv', torneoTV); if (modoVistaTV === 'dividido') renderizarVistaResultadosUnificada('cabecera-tabla-split', torneoTV); }
+}
+function onPresenciaSync() {
+    const nuevo = calcularTirando(); const igual = nuevo.size === tiradoresTirando.size && [...nuevo].every(x => tiradoresTirando.has(x));
+    tiradoresTirando = nuevo; if (!igual) redibujarResultados();
+}
+function publicarPresenciaJuez() {
+    if (!esAdmin || !canalListo) return;
+    const enJueces = tabAdminActiva === 'tab-jueces';
+    const idT = (enJueces && torneoAdmin && tiradorJuezActivoId && tiradorJuezActivoId !== JUEZ_EMPEZAR) ? String(tiradorJuezActivoId) : null;
+    const payload = { torneo_id: torneoAdmin ? String(torneoAdmin.id) : null, tirador_id: idT, rol: rolActual };
+    const clave = JSON.stringify(payload); if (clave === presenciaUltima) return; presenciaUltima = clave;
+    try { canalRealtime.track(payload); } catch (e) {}
+}
+window.addEventListener('beforeunload', () => { try { if (esAdmin) canalRealtime.untrack(); } catch (e) {} });
+
+// Los jueces/admin reciben los cambios de los demás (resultados, llamado a pedana) sin recargar
+let refrescoAdminTimer = null;
+function programarRefrescoAdmin() {
+    clearTimeout(refrescoAdminTimer);
+    refrescoAdminTimer = setTimeout(async () => {
+        if (!torneoAdmin) return;
+        const el = document.activeElement; if (el && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return programarRefrescoAdmin(); // no pisar lo que se está escribiendo
+        const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoAdmin.id).single();
+        if (data) { Object.assign(torneoAdmin, data); if (!torneoAdmin.platos_por_serie) torneoAdmin.platos_por_serie = 12; if (!torneoAdmin.vueltas) torneoAdmin.vueltas = 1; if (!torneoAdmin.paralelos) torneoAdmin.paralelos = []; }
+        await cargarResultados(torneoAdmin.id);
+    }, 400);
+}
+
+// Roles: 'admin' ve todo; 'juez' solo Resultados, Ver tirador en pedana y Jueces (la seguridad real está en las políticas RLS de Supabase)
+const PESTANAS_SOLO_ADMIN = ['tab-stats', 'tab-bd', 'tab-torneos'];
+const FUNCIONES_SOLO_ADMIN = ['crearTorneo', 'editarTorneoActual', 'eliminarTorneoActual', 'toggleEstadoTorneoActual', 'guardarCostos', 'agregarParalelo', 'eliminarParalelo', 'agregarCategoriaConfig', 'eliminarCategoriaConfig', 'guardarTiradorMaster', 'guardarEdicionMaster', 'eliminarTiradorMaster', 'agregarDesdeMaster', 'quitarDesdeMaster', 'confirmarModalOrden', 'agregarTirador', 'eliminarTirador', 'guardarEdicionTirador', 'importarExcelDesdeArchivo'];
+async function cargarRol(session) {
+    rolActual = 'juez'; // ante la duda, el rol de menos permisos
+    try { const { data } = await clienteSupabase.from('perfiles').select('rol').eq('id', session.user.id).maybeSingle(); if (data && data.rol === 'admin') rolActual = 'admin'; } catch (e) {}
+    document.body.classList.add(rolActual === 'admin' ? 'rol-admin' : 'rol-juez');
+    const badge = document.getElementById('rol-badge'); if (badge) { badge.innerText = rolActual === 'admin' ? 'ADMIN' : 'JUEZ'; badge.title = session.user.email || ''; badge.style.display = 'inline-block'; }
+    if (rolActual !== 'admin') FUNCIONES_SOLO_ADMIN.forEach(n => { window[n] = function() { mostrarAlerta('Tu rol (juez) no tiene permiso para hacer esto.'); }; });
+}
 
 setInterval(() => { 
     const ahora = new Date();
@@ -50,7 +103,7 @@ window.cerrarConfirmacion = function() { document.getElementById('modal-confirm'
 
 async function verificarSesion() {
     const { data: { session } } = await clienteSupabase.auth.getSession();
-    if (esAdmin) { if (!session) window.location.href = 'index.html'; else { document.getElementById('admin-body').style.display = 'block'; inicializarDatos(); } } else inicializarDatos(); 
+    if (esAdmin) { if (!session) window.location.href = 'index.html'; else { await cargarRol(session); document.getElementById('admin-body').style.display = 'block'; inicializarDatos(); } } else inicializarDatos(); 
 }
 window.abrirModalLogin = () => document.getElementById('modal-login').style.display = 'flex';
 window.cerrarModalLogin = () => { document.getElementById('modal-login').style.display = 'none'; document.getElementById('login-error').style.display = 'none'; }
@@ -63,7 +116,7 @@ async function inicializarDatos() {
     listaTorneos = torneos || [];
     
     if (esAdmin) {
-        await cargarMasterDB(); 
+        if (rolActual === 'admin') await cargarMasterDB(); 
         renderizarBotonesTorneosAdmin();
         if (!torneoAdmin && listaTorneos.length > 0) seleccionarTorneoAdmin(torneosPorRecientes()[0].id);
         else if (torneoAdmin) seleccionarTorneoAdmin(torneoAdmin.id);
@@ -391,7 +444,7 @@ window.seleccionarTorneoAdmin = async function(id) {
 }
 
 window.toggleEstadoTorneoActual = async function() { if (!torneoAdmin) return; let nuevoEstado = (torneoAdmin.estado === 'En curso') ? 'Finalizado' : 'En curso'; await clienteSupabase.from('torneos').update({ estado: nuevoEstado }).eq('id', torneoAdmin.id); torneoAdmin.estado = nuevoEstado; seleccionarTorneoAdmin(torneoAdmin.id); avisarALaTV(); }
-window.abrirPestana = function(idTab, elementoBtn) { document.querySelectorAll('.tab-pane').forEach(tab => tab.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(idTab).classList.add('active'); elementoBtn.classList.add('active'); }
+window.abrirPestana = function(idTab, elementoBtn) { if (rolActual === 'juez' && PESTANAS_SOLO_ADMIN.includes(idTab)) return; tabAdminActiva = idTab; document.querySelectorAll('.tab-pane').forEach(tab => tab.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(idTab).classList.add('active'); elementoBtn.classList.add('active'); publicarPresenciaJuez(); }
 
 async function cargarResultados(idTorneo) {
     if (!idTorneo) return;
@@ -410,6 +463,7 @@ async function cargarResultados(idTorneo) {
         tiradoresLocales = data;
     } else tiradoresLocales = [];
 
+    tiradoresTirando = calcularTirando();
     const objTorneo = esAdmin ? torneoAdmin : torneoTV;
     if (esAdmin) {
         renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); renderizarAdminJueces(); renderizarAdminBaseDatosTorneo(); renderizarMaster(); renderizarStats(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', objTorneo); renderizarPedana('contenedor-pedana-admin', objTorneo);
@@ -431,13 +485,8 @@ function renderizarFiltrosCategorias(containerId, torneoConfig) { const cont = d
 function renderSelectCategoriasGeneral() { if (!torneoAdmin) return; const cats = obtenerCategorias(torneoAdmin); let html = ''; cats.forEach(c => html += `<option value="${c}">${c}</option>`); const selects = ['input-categoria', 'edit-categoria', 'input-master-categoria', 'edit-master-categoria']; selects.forEach(id => { let el = document.getElementById(id); if(el) el.innerHTML = html; }); }
 window.setFiltroCategoria = function(cat) { filtroCategoria = cat; const objTorneo = esAdmin ? torneoAdmin : torneoTV; if (esAdmin) { renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); cargarResultados(torneoAdmin.id); } else { renderizarFiltrosCategorias('filtros-cat-tv', objTorneo); cargarResultados(torneoTV.id); } }
 window.setFiltroBusqueda = function(txt) { filtroBusqueda = txt.toLowerCase(); if(esAdmin) cargarResultados(torneoAdmin.id); else cargarResultados(torneoTV.id); }
-// Un tirador está "tirando" si ya empezó su serie y todavía no la completó.
-// En modo sin límite no hay fin definido: se considera tirando si un juez lo puntuó en los últimos 2 minutos.
-function estaTirando(row, torneoConfig, maxCols) {
-    if (row.ausente) return false;
-    if (torneoConfig.modo_sin_limite) { const ts = actividadTirador[row.id]; return !!ts && (Date.now() - ts) < 120000; }
-    return row.totalTirados > 0 && row.totalTirados < maxCols;
-}
+// "TIRANDO" = algún juez o admin tiene a ese tirador abierto en la pestaña Jueces en este momento (se sabe por Realtime Presence)
+function estaTirando(row) { return !row.ausente && tiradoresTirando.has(String(row.id)); }
 function formatearNombre(nombre) { return nombre.length > 14 ? nombre.substring(0, 14).trim() + '...' : nombre; }
 
 function construirGrupos(torneoConfig, maxCols) {
@@ -730,7 +779,7 @@ window.renderizarAdminJueces = function() {
     let totP = torneoAdmin.modo_sin_limite ? '∞' : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
     if (!filtro) sidebar.innerHTML += `<div class="juez-list-item empezar ${tiradorJuezActivoId === JUEZ_EMPEZAR ? 'active' : ''}" onclick="seleccionarTiradorJuez('${JUEZ_EMPEZAR}')"><span>▶ EMPEZAR</span><span class="empezar-tag">Nº 0</span></div>`;
     listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold; white-space: nowrap;">${row.totalTirados}/${totP}${row.barrage > 0 ? ` <span style="color: var(--accent-yellow);">B${row.barrage}</span>` : ''}</span></div>`; });
-    renderizarPanelDerechoJuez();
+    renderizarPanelDerechoJuez(); publicarPresenciaJuez();
 }
 
 window.cambiarGrupoJueces = function() { grupoJuecesActivo = document.getElementById('select-grupo-jueces').value; tiradorJuezActivoId = null; juezPlatoSeleccionadoIdx = null; renderizarAdminJueces(); }
@@ -878,8 +927,7 @@ window.marcarPlatoRapido = async function(idRow, idx, valor) {
     
     t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
     renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
-    actividadTirador[idRow] = Date.now();
-    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV({ tiradorId: idRow });
+    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
 }
 
 window.vaciarPlatoRapido = async function(idRow, idx) {
@@ -890,8 +938,7 @@ window.vaciarPlatoRapido = async function(idRow, idx) {
     juezPlatoSeleccionadoIdx = Math.min(idx, torneoAdmin.modo_sin_limite ? t.resultados.length : idx);
     t.totalAciertos = t.resultados.filter(r => r === 1).length; t.totalTirados = t.resultados.filter(r => r !== null && r !== undefined).length; t.puntajeFinal = t.totalAciertos + (t.barrage || 0);
     renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarPedana('contenedor-pedana-admin', torneoAdmin); renderizarStats();
-    actividadTirador[idRow] = Date.now();
-    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV({ tiradorId: idRow });
+    await clienteSupabase.from('inscripciones').update({ resultados: t.resultados }).eq('id', idRow); avisarALaTV();
 }
 
 window.toggleAusente = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.ausente = !t.ausente; await clienteSupabase.from('inscripciones').update({ ausente: t.ausente }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarStats(); renderizarAdminBaseDatosTorneo(); avisarALaTV(); } }
@@ -966,7 +1013,8 @@ window.editarTorneoActual = async function() {
 
 window.eliminarTorneoActual = function() { mostrarConfirmacion("¿ELIMINAR torneo completo y TODOS sus tiradores?", async () => { await clienteSupabase.from('inscripciones').delete().eq('torneo_id', torneoAdmin.id); await clienteSupabase.from('torneos').delete().eq('id', torneoAdmin.id); torneoAdmin = null; await inicializarDatos(); avisarALaTV(); }); }
 
-canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async (msg) => { if (!esAdmin) { const tid = msg && msg.payload && msg.payload.tiradorId; if (tid) actividadTirador[tid] = Date.now(); if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos(); } }).subscribe();
-// En modo sin límite, refresca para que el cartel TIRANDO se apague solo al pasar la inactividad
-setInterval(() => { if (!esAdmin && torneoTV && torneoTV.modo_sin_limite) cargarResultados(torneoTV.id); }, 30000);
+canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async () => {
+    if (esAdmin) { programarRefrescoAdmin(); return; }
+    if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos();
+}).on('presence', { event: 'sync' }, onPresenciaSync).subscribe((status) => { if (status === 'SUBSCRIBED') { canalListo = true; presenciaUltima = ''; publicarPresenciaJuez(); onPresenciaSync(); } });
 document.addEventListener('DOMContentLoaded', verificarSesion);
