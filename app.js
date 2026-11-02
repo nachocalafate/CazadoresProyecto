@@ -455,8 +455,10 @@ async function cargarResultados(idTorneo) {
             if (!row.resultados || !Array.isArray(row.resultados)) {
                 row.resultados = tConf.modo_sin_limite ? [] : Array(tConf.platos_por_serie * (tConf.vueltas || 1)).fill(null);
             }
+            if (tConf.modo_sin_limite) { while (row.resultados.length && (row.resultados[row.resultados.length - 1] === null || row.resultados[row.resultados.length - 1] === undefined)) row.resultados.pop(); } // sin límite no tiene casilleros vacíos de relleno
+            else { const total = tConf.platos_por_serie * (tConf.vueltas || 1); while (row.resultados.length < total) row.resultados.push(null); } // fijo: completa hasta el total
             row.totalAciertos = row.resultados.filter(r => r === 1).length;
-            row.totalTirados = row.resultados.filter(r => r !== null).length;
+            row.totalTirados = row.resultados.filter(r => r !== null && r !== undefined).length;
             row.barrage = row.barrage || 0; row.ausente = row.ausente || false; row.puntajeFinal = row.totalAciertos + row.barrage;
             row.paralelos_inscriptos = row.paralelos_inscriptos || [];
         });
@@ -584,7 +586,9 @@ function renderizarPedana(containerId, torneoConfig) {
     const cont = document.getElementById(containerId); if (!cont || !torneoConfig) return;
     let lista = [...tiradoresLocales].sort((a,b) => a.orden - b.orden);
     if (lista.length === 0) { cont.innerHTML = '<h3 style="text-align:center;">No hay tiradores</h3>'; return; }
-    let idx = torneoConfig.tirador_actual_index || 0; if (idx >= lista.length) idx = lista.length - 1; let actual = lista[idx];
+    let idx = torneoConfig.tirador_actual_index || 0;
+    if (idx < 0) { cont.innerHTML = `<div class="pedana-container"><div class="pedana-main pedana-final"><div class="pedana-lbl">TIRADA FINALIZADA</div><div class="pedana-final-titulo">¡GRACIAS A TODOS!</div><div class="pedana-final-sub">CLUB CAZADORES DE TRES ARROYOS</div></div></div>`; return; }
+    if (idx >= lista.length) idx = lista.length - 1; let actual = lista[idx];
 
     let tirados = actual.resultados.filter(v => v !== null && v !== undefined).length;
     let totalP = torneoConfig.modo_sin_limite ? Math.max(5, actual.resultados.length) : (torneoConfig.platos_por_serie * (torneoConfig.vueltas || 1));
@@ -605,15 +609,25 @@ function renderizarPedana(containerId, torneoConfig) {
     cont.innerHTML = `<div class="pedana-container"><div class="pedana-main" style="${actual.ausente ? 'opacity:0.5;' : ''}"><div class="pedana-lbl">LLAMADO A PEDANA</div><div class="pedana-orden">${actual.orden}</div><div class="pedana-nombre">${actual.ausente ? 'AUSENTE: ' : ''}${actual.tirador}</div><div><span class="tag-categoria ${catClassAct}" style="font-size: 1.1rem; padding: 5px 16px;">${actual.categoria.toUpperCase()}</span></div><div class="pedana-stats"><span class="numero-grande">${actual.totalAciertos}</span><span class="texto-chico">${subTxt}</span></div></div>${htmlNext}</div>`;
 }
 
-window.cambiarPedana = async function(delta) { if (!torneoAdmin) return; let max = tiradoresLocales.length - 1; let newIdx = (torneoAdmin.tirador_actual_index || 0) + delta; if (newIdx < 0) newIdx = 0; if (newIdx > max) newIdx = max; await clienteSupabase.from('torneos').update({ tirador_actual_index: newIdx }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = newIdx; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV(); }
+window.cambiarPedana = async function(delta) { if (!torneoAdmin) return; let max = tiradoresLocales.length - 1; const actualIdx = torneoAdmin.tirador_actual_index || 0; let newIdx = actualIdx < 0 ? (delta < 0 ? max : -1) : actualIdx + delta; if (newIdx < 0 && actualIdx >= 0) newIdx = 0; if (newIdx > max) newIdx = max; await clienteSupabase.from('torneos').update({ tirador_actual_index: newIdx }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = newIdx; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV(); }
 // La pedana llama al siguiente del que está puntuando el juez (EMPEZAR = nadie puntuando, se llama al primero)
-async function sincronizarPedanaConJuez(idSeleccionado) {
+async function sincronizarPedanaConJuez(idSeleccionado, plano = true) {
     const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden);
     let i = idSeleccionado === JUEZ_EMPEZAR ? -1 : porOrden.findIndex(x => x.id === idSeleccionado);
     if (i === -1 && idSeleccionado !== JUEZ_EMPEZAR) return;
-    let indexPedana = i + 1; if (indexPedana >= porOrden.length) indexPedana = Math.max(0, porOrden.length - 1);
+    let indexPedana = i + 1;
+    if (indexPedana >= porOrden.length) {
+        // Se llegó al último: si quedan rondas, en pedana se llama al primero para la ronda siguiente; si no, queda el último
+        const rondas = torneoAdmin.modo_sin_limite ? 1 : (torneoAdmin.vueltas || 1);
+        indexPedana = (plano && rondas > 1 && vueltaJuezActiva < rondas) ? 0 : Math.max(0, porOrden.length - 1);
+    }
     await clienteSupabase.from('torneos').update({ tirador_actual_index: indexPedana }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = indexPedana; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV();
 }
+// Fin de la tirada: tirador_actual_index = -1 hace que la pedana muestre el mensaje de cierre
+async function finalizarTiradaPedana() {
+    await clienteSupabase.from('torneos').update({ tirador_actual_index: -1 }).eq('id', torneoAdmin.id); torneoAdmin.tirador_actual_index = -1; renderizarPedana('contenedor-pedana-admin', torneoAdmin); avisarALaTV();
+}
+
 
 function claveRanking(t) { return [t.puntajeFinal, t.barrage || 0, t.totalAciertos]; }
 function mismoRanking(a, b) { const x = claveRanking(a), y = claveRanking(b); return x[0] === y[0] && x[1] === y[1] && x[2] === y[2]; }
@@ -720,7 +734,7 @@ function htmlTablaFinanzas(fin) {
 function renderizarStats() {
     const cont = document.getElementById('contenedor-stats'); if (!cont || !torneoAdmin) return; if (tiradoresLocales.length === 0) { cont.innerHTML = '<p>No hay datos.</p>'; return; }
     const costos = torneoAdmin.costos || { "Senior": 20000, "Veterano": 20000, "Super Vet.": 15000, "Dama": 10000, "Junior": 10000, "Principiante": 10000, "Objetivo": 1000, "Retencion": 10 };
-    const catsList = obtenerCategorias(torneoAdmin); let presentes = tiradoresLocales.filter(t => !t.ausente); let totTiradores = presentes.length; let totObjetivos = torneoAdmin.modo_sin_limite ? '∞' : (totTiradores * torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)); let tirados = 0, pegados = 0, errados = 0, recaudado = 0; let catsCount = {}; catsList.forEach(c => catsCount[c] = 0);
+    const catsList = obtenerCategorias(torneoAdmin); let presentes = tiradoresLocales.filter(t => !t.ausente); let totTiradores = presentes.length; let totObjetivos = torneoAdmin.modo_sin_limite ? presentes.reduce((s, t) => s + t.totalTirados, 0) : (totTiradores * torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1)); let tirados = 0, pegados = 0, errados = 0, recaudado = 0; let catsCount = {}; catsList.forEach(c => catsCount[c] = 0);
     let paralelos = torneoAdmin.paralelos || [];
     presentes.forEach(t => { if(catsCount[t.categoria] !== undefined) catsCount[t.categoria]++; else catsCount[t.categoria] = 1; let subtotal = (costos[t.categoria] || 0); let pins = t.paralelos_inscriptos || []; paralelos.forEach(p => { if(pins.includes(p.nombre)) subtotal += p.costo; }); recaudado += subtotal; t.resultados.forEach(r => { if(r !== null && r !== undefined) { tirados++; if(r===1) pegados++; else errados++; } }); });
     let premios = Math.max(0, recaudado - (tirados * (costos["Objetivo"] || 1000)) - ((recaudado * (costos["Retencion"] || 10)) / 100));
@@ -776,9 +790,9 @@ window.renderizarAdminJueces = function() {
     const filtro = document.getElementById('buscador-jueces').value.toLowerCase(); if (filtro) listaMostrar = listaMostrar.filter(t => t.tirador.toLowerCase().includes(filtro));
     if (tiradorJuezActivoId !== JUEZ_EMPEZAR && !tiradoresLocales.find(x => x.id === tiradorJuezActivoId)) { tiradorJuezActivoId = juezInicialId(listaMostrar); juezPlatoSeleccionadoIdx = null; }
 
-    let totP = torneoAdmin.modo_sin_limite ? '∞' : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
+    let totP = torneoAdmin.modo_sin_limite ? null : (torneoAdmin.platos_por_serie * (torneoAdmin.vueltas || 1));
     if (!filtro) sidebar.innerHTML += `<div class="juez-list-item empezar ${tiradorJuezActivoId === JUEZ_EMPEZAR ? 'active' : ''}" onclick="seleccionarTiradorJuez('${JUEZ_EMPEZAR}')"><span>▶ EMPEZAR</span><span class="empezar-tag">Nº 0</span></div>`;
-    listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold; white-space: nowrap;">${row.totalTirados}/${totP}${row.barrage > 0 ? ` <span style="color: var(--accent-yellow);">B${row.barrage}</span>` : ''}</span></div>`; });
+    listaMostrar.forEach(row => { sidebar.innerHTML += `<div class="juez-list-item ${(tiradorJuezActivoId === row.id) ? 'active' : ''}" style="${row.ausente ? 'opacity: 0.5;' : ''}" onclick="seleccionarTiradorJuez('${row.id}')"><span>${row.orden}. ${row.tirador}${row.ausente ? ' <span style="color:var(--danger); font-size:0.75rem; font-weight:bold;">[AUS]</span>' : ''}</span><span style="color: white; font-weight: bold; white-space: nowrap;">${totP === null ? `${row.totalAciertos}/${row.totalTirados}` : `${row.totalTirados}/${totP}`}${row.barrage > 0 ? ` <span style="color: var(--accent-yellow);">B${row.barrage}</span>` : ''}</span></div>`; });
     renderizarPanelDerechoJuez(); publicarPresenciaJuez();
 }
 
@@ -792,24 +806,39 @@ function listaBaseJuez() {
 }
 // Con qué tirador abre el panel del juez: EMPEZAR si el torneo no arrancó; si ya hay llamados, el que está puntuando (el anterior al que figura en pedana)
 function juezInicialId(listaMostrar) {
-    const idx = torneoAdmin.tirador_actual_index || 0; if (idx <= 0) return JUEZ_EMPEZAR;
+    const idx = torneoAdmin.tirador_actual_index || 0; if (idx === 0) return JUEZ_EMPEZAR; if (idx < 0) { const ult = [...tiradoresLocales].sort((a, b) => a.orden - b.orden).pop(); return (ult && listaMostrar.some(x => x.id === ult.id)) ? ult.id : JUEZ_EMPEZAR; }
     const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); const t = porOrden[idx - 1];
     return (t && listaMostrar.some(x => x.id === t.id)) ? t.id : JUEZ_EMPEZAR;
 }
 window.cambiarTiradorJuez = function(delta, llamar = false) {
     const lista = listaBaseJuez(); if (lista.length === 0) return;
     const rotativo = torneoAdmin.disciplina === 'Plato' && grupoJuecesActivo !== 'Todos';
+    const rondas = torneoAdmin.modo_sin_limite ? 1 : (torneoAdmin.vueltas || 1);
     let pos = tiradorJuezActivoId === JUEZ_EMPEZAR ? -1 : lista.findIndex(x => x.id === tiradorJuezActivoId);
     if (pos === -1 && tiradorJuezActivoId !== JUEZ_EMPEZAR) pos = 0;
-    let nueva = pos + delta;
-    if (nueva < -1) nueva = -1;                                   // no hay nada antes de EMPEZAR
-    if (nueva >= lista.length) nueva = rotativo ? 0 : lista.length - 1; // en escuadra de plato vuelve al primero
+    let nueva = pos + delta; let cerrarTirada = false;
+    if (nueva < -1) nueva = -1;
+    if (nueva === -1 && delta < 0 && pos === 0 && !rotativo && rondas > 1 && vueltaJuezActiva > 1) { vueltaJuezActiva--; nueva = lista.length - 1; } // atrás desde el 1º: último de la ronda anterior
+    if (nueva >= lista.length) {
+        if (rotativo) nueva = 0;                                                              // escuadra de plato: vuelve al primero
+        else if (rondas > 1 && vueltaJuezActiva < rondas) { vueltaJuezActiva++; nueva = 0; } // termina la ronda: da la vuelta al primero de la siguiente
+        else { nueva = lista.length - 1; if (llamar && delta > 0) cerrarTirada = true; }     // última ronda y último tirador: se cierra la tirada
+    }
     tiradorJuezActivoId = nueva === -1 ? JUEZ_EMPEZAR : lista[nueva].id;
     juezPlatoSeleccionadoIdx = null; renderizarAdminJueces();
-    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); if (activo) activo.scrollIntoView({ block: 'nearest' }); if (llamar) sincronizarPedanaConJuez(tiradorJuezActivoId);
+    const activo = document.querySelector('#juez-lista-tiradores .juez-list-item.active'); if (activo) activo.scrollIntoView({ block: 'nearest' });
+    if (llamar) { if (cerrarTirada) finalizarTiradaPedana(); else sincronizarPedanaConJuez(tiradorJuezActivoId, !rotativo); }
 }
 
 window.seleccionarVueltaJuez = function(v) { vueltaJuezActiva = v; juezPlatoSeleccionadoIdx = null; renderizarPanelDerechoJuez(); }
+window.moverObjetivoJuez = function(delta) {
+    const t = tiradoresLocales.find(x => x.id === tiradorJuezActivoId); if (!t || juezPlatoSeleccionadoIdx === null) return;
+    const sin = torneoAdmin.modo_sin_limite; const lim = torneoAdmin.platos_por_serie; const vueltas = sin ? 1 : (torneoAdmin.vueltas || 1);
+    let nuevo = juezPlatoSeleccionadoIdx + delta;
+    if (sin) nuevo = Math.max(0, Math.min(t.resultados.length, nuevo));
+    else { nuevo = Math.max(0, Math.min(lim * vueltas - 1, nuevo)); vueltaJuezActiva = Math.floor(nuevo / lim) + 1; } // si cruza de ronda, cambia la pestaña
+    juezPlatoSeleccionadoIdx = nuevo; renderizarPanelDerechoJuez();
+}
 window.seleccionarCasillaJuez = function(idx) { juezPlatoSeleccionadoIdx = idx; renderizarPanelDerechoJuez(); }
 
 // "Siguiente y llamar" mueve la pantalla de pedana para todos: solo lo usa el juez que llama.
@@ -826,10 +855,10 @@ function htmlControlPedana() {
 
 function htmlPanelEmpezar() {
     const lista = listaBaseJuez(); const primero = lista[0]; const segundo = lista[1];
-    const idx = torneoAdmin.tirador_actual_index || 0; const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); const enPedana = porOrden[Math.min(idx, porOrden.length - 1)];
+    const idx = torneoAdmin.tirador_actual_index || 0; const porOrden = [...tiradoresLocales].sort((a, b) => a.orden - b.orden); const enPedana = idx < 0 ? null : porOrden[Math.min(idx, porOrden.length - 1)];
     const btnSig = 'display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; line-height: 1; box-sizing: border-box; font-size: 1rem; padding: 0 20px;';
     const info = !primero ? 'Todavía no hay tiradores inscriptos en este torneo.'
-        : `En pedana está llamado el <b>Nº ${enPedana.orden} · ${escHtml(enPedana.tirador)}</b>.<br>Al pasar al <b>Nº ${primero.orden} · ${escHtml(primero.tirador)}</b> para puntuarlo, ${segundo ? `la pedana llama al <b>Nº ${segundo.orden}</b>` : 'termina la lista de llamados'} (si usás “Siguiente y llamar”).`;
+        : `${enPedana ? `En pedana está llamado el <b>Nº ${enPedana.orden} · ${escHtml(enPedana.tirador)}</b>.` : 'En pedana figura la tirada como <b>finalizada</b>.'}<br>Al pasar al <b>Nº ${primero.orden} · ${escHtml(primero.tirador)}</b> para puntuarlo, ${segundo ? `la pedana llama al <b>Nº ${segundo.orden}</b>` : 'termina la lista de llamados'} (si usás “Siguiente y llamar”).`;
     return `<div class="juez-main-header">▶ EMPEZAR</div><div class="juez-main-subtitle">Punto de partida · todavía no se está puntuando a nadie</div>
         <div class="empezar-info">${info}</div>
         <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; margin-bottom: 10px;"><button class="btn-outline" disabled style="${btnSig} opacity: .35; cursor: not-allowed;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="${btnSig} background-color: var(--accent); color: white; font-weight: bold; border: none;">Siguiente tirador →</button></div>
@@ -898,7 +927,8 @@ function renderizarPanelDerechoJuez() {
     let labelPos = isSinLimite ? (juezPlatoSeleccionadoIdx + 1) : (juezPlatoSeleccionadoIdx - idxInicioRonda + 1);
     
     const valAct = t.resultados[juezPlatoSeleccionadoIdx]; const hayDato = valAct !== null && valAct !== undefined;
-    let vaciarBtn = `<button class="btn-juez-vaciar" ${hayDato ? '' : 'disabled'} onclick="vaciarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx})" title="Deja este objetivo sin resultado">Vaciar<br>objetivo</button>`;
+    const maxIdxObj = isSinLimite ? t.resultados.length : (limitRonda * totalVueltas - 1);
+    let vaciarBtn = `<div class="col-vaciar"><div class="flechas-objetivo"><button class="btn-flecha-obj" ${juezPlatoSeleccionadoIdx <= 0 ? 'disabled' : ''} onclick="moverObjetivoJuez(-1)" title="Objetivo anterior">◀</button><button class="btn-flecha-obj" ${juezPlatoSeleccionadoIdx >= maxIdxObj ? 'disabled' : ''} onclick="moverObjetivoJuez(1)" title="Objetivo siguiente">▶</button></div><button class="btn-juez-vaciar" ${hayDato ? '' : 'disabled'} onclick="vaciarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx})" title="Deja este objetivo sin resultado">Vaciar<br>objetivo</button></div>`;
     let botonesGrandes = '';
     if (!t.ausente) {
         botonesGrandes = `<div style="font-size: 0.95rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 10px; text-transform: uppercase;">Modificando Posición Nº ${labelPos}</div><div class="panel-juez-botones con-vaciar"><button class="btn-juez-grande btn-juez-acierto" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 1)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✔</div>ACIERTO</button><button class="btn-juez-grande btn-juez-error" onclick="marcarPlatoRapido('${t.id}', ${juezPlatoSeleccionadoIdx}, 0)"><div style="font-size: 3rem; line-height: 1; opacity: 0.9;">✖</div>ERROR</button>${vaciarBtn}</div><div style="text-align: center; color: #888; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px;">(Toca arriba cualquier casilla para cambiar de posición)</div>`;
@@ -906,7 +936,7 @@ function renderizarPanelDerechoJuez() {
     
     let serieTxt = isSinLimite ? `TIRADOS: ${t.totalTirados} | ACIERTOS: ${t.totalAciertos}` : `SERIE ${t.totalTirados === (limitRonda * totalVueltas) ? 'COMPLETA' : 'EN CURSO'}: ${t.totalTirados} DE ${limitRonda * totalVueltas} (Aciertos: ${t.totalAciertos})`;
 
-    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; line-height: 1; box-sizing: border-box; font-size: 1rem; padding: 0 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; line-height: 1; box-sizing: border-box; font-size: 1rem; padding: 0 20px; background-color: var(--accent); color: white; font-weight: bold; border: none;" title="Cambia de tirador solo en esta pantalla de juez">${btnRotativoTxt}</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.3rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 15px;">${serieTxt}</div>${htmlRondas}<div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-top: 5px;">${htmlPlatos}${botonesGrandes}</div>${htmlControlPedana()}<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}"><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
+    panel.innerHTML = `<div class="juez-main-header">${t.tirador}</div><div class="juez-main-subtitle">(Nº ${t.orden} - ${t.categoria})</div><div style="margin-bottom: 25px;"><button onclick="toggleAusente('${t.id}')" style="${t.ausente ? "background-color: var(--danger); color: white; border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;" : "background-color: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer;"}">${t.ausente ? '❌ MARCADO COMO AUSENTE (Click para deshacer)' : 'Marcar como AUSENTE'}</button></div><div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;"><button class="btn-outline" onclick="cambiarTiradorJuez(-1)" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; line-height: 1; box-sizing: border-box; font-size: 1rem; padding: 0 20px;">← Anterior</button><button onclick="cambiarTiradorJuez(1)" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 44px; line-height: 1; box-sizing: border-box; font-size: 1rem; padding: 0 20px; background-color: var(--accent); color: white; font-weight: bold; border: none;" title="Cambia de tirador solo en esta pantalla de juez">${btnRotativoTxt}</button></div><div style="${t.ausente ? 'opacity: 0.3; pointer-events: none;' : ''}"><div style="font-size: 1.3rem; color: var(--accent-yellow); font-weight: bold; margin-bottom: 15px;">${serieTxt}</div>${htmlRondas}<div style="background-color: var(--bg-main); padding: 20px; border-radius: 8px; margin-top: 5px;">${htmlPlatos}${botonesGrandes}</div>${htmlControlPedana()}<div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-top: 30px; background-color: var(--bg-main); padding: 20px; border-radius: 8px;"><label style="font-size: 1.2rem; font-weight: bold;">BARRAGE:</label><input type="number" id="input-barrage-${t.id}" class="barrage-input" value="${t.barrage || 0}" min="0"><div class="barrage-pm"><button type="button" onclick="ajustarBarrage('${t.id}', 1)" title="Sumar 1">+</button><button type="button" onclick="ajustarBarrage('${t.id}', -1)" title="Restar 1">−</button></div><button onclick="guardarBarrage('${t.id}')">Guardar</button></div></div>`;
 }
 
 window.marcarPlatoRapido = async function(idRow, idx, valor) {
@@ -942,6 +972,10 @@ window.vaciarPlatoRapido = async function(idRow, idx) {
 }
 
 window.toggleAusente = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.ausente = !t.ausente; await clienteSupabase.from('inscripciones').update({ ausente: t.ausente }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); renderizarStats(); renderizarAdminBaseDatosTorneo(); avisarALaTV(); } }
+window.ajustarBarrage = function(id, delta) {
+    const inp = document.getElementById(`input-barrage-${id}`); if (!inp) return;
+    inp.value = Math.max(0, (parseInt(inp.value) || 0) + delta); guardarBarrage(id); // se guarda al instante
+}
 window.guardarBarrage = async function(id) { let t = tiradoresLocales.find(x => x.id === id); if(t) { t.barrage = parseInt(document.getElementById(`input-barrage-${id}`).value) || 0; t.puntajeFinal = t.totalAciertos + t.barrage; await clienteSupabase.from('inscripciones').update({ barrage: t.barrage }).eq('id', id); renderizarAdminJueces(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', torneoAdmin); avisarALaTV(); } }
 
 function renderizarAdminBaseDatosTorneo() {
@@ -1008,6 +1042,11 @@ window.editarTorneoActual = async function() {
     let vFinal = modoSinLimite ? 1 : parseInt(vueltas);
     
     await clienteSupabase.from('torneos').update({ nombre: document.getElementById('edit-nombre-torneo').value, fecha: f, platos_por_serie: pFinal, disciplina: disc, tamano_grupo: gFinal, vueltas: vFinal, modo_sin_limite: modoSinLimite }).eq('id', torneoAdmin.id);
+    // Al pasar a sin límite se quitan los casilleros vacíos de relleno: los resultados empiezan desde el Nº 1
+    if (modoSinLimite) {
+        const { data: ins } = await clienteSupabase.from('inscripciones').select('id, resultados').eq('torneo_id', torneoAdmin.id);
+        for (const r of (ins || [])) { if (!Array.isArray(r.resultados)) continue; const rs = [...r.resultados]; while (rs.length && (rs[rs.length - 1] === null || rs[rs.length - 1] === undefined)) rs.pop(); if (rs.length !== r.resultados.length) await clienteSupabase.from('inscripciones').update({ resultados: rs }).eq('id', r.id); }
+    }
     await inicializarDatos(); avisarALaTV(); mostrarAlerta('Torneo actualizado.');
 }
 

@@ -428,3 +428,26 @@ main.container { padding-top: 38px; }
 body.rol-juez .solo-admin { display: none !important; }
 .rol-badge { font-size: .75rem; font-weight: 900; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--accent-yellow); color: var(--accent-yellow); background: rgba(255,214,0,.08); }
 body.rol-juez .rol-badge { border-color: #3B82F6; color: #7fb0ff; background: rgba(59,130,246,.1); }
+
+/* Juez: flechas de objetivo + vaciar */
+.col-vaciar { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+.flechas-objetivo { display: flex; gap: 6px; }
+.btn-flecha-obj { flex: 1; height: 38px; padding: 0; background: #1a1a1a; color: white; border: 2px solid #555; border-radius: 8px; font-size: 1rem; line-height: 1; }
+.btn-flecha-obj:hover:not(:disabled) { background: #2a2a2a; border-color: white; }
+.btn-flecha-obj:disabled { opacity: .3; cursor: not-allowed; }
+.col-vaciar .btn-juez-vaciar { align-self: stretch; }
+
+/* Barrage: sin flechitas nativas, con + / − al costado */
+.barrage-input { -moz-appearance: textfield; appearance: textfield; }
+.barrage-input::-webkit-outer-spin-button, .barrage-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.barrage-pm { display: flex; flex-direction: column; gap: 4px; }
+.barrage-pm button { width: 44px; height: 30px; padding: 0; font-size: 1.2rem; font-weight: 900; line-height: 1; background: #1a1a1a; border: 2px solid #555; border-radius: 6px; }
+.barrage-pm button:hover { background: #2a2a2a; border-color: white; }
+
+/* Pedana: tirada finalizada */
+.pedana-final .pedana-final-titulo { font-size: 3.4rem; font-weight: 900; color: var(--accent-yellow); letter-spacing: 2px; margin: 25px 0 12px; line-height: 1.1; }
+.pedana-final .pedana-final-sub { font-size: 1.1rem; font-weight: bold; letter-spacing: 3px; color: rgba(255,255,255,.8); }
+body.modo-tv-activo .pedana-final .pedana-final-titulo { font-size: 6rem; margin: 40px 0 20px; }
+body.modo-tv-activo .pedana-final .pedana-final-sub { font-size: 1.8rem; }
+body.modo-tv-activo .split-right .pedana-final .pedana-final-titulo { font-size: 2.6rem; margin: 20px 0 10px; }
+body.modo-tv-activo .split-right .pedana-final .pedana-final-sub { font-size: .95rem; letter-spacing: 2px; }
