@@ -45,6 +45,15 @@ function onPresenciaSync() {
     if (esAdmin && canalListo && presenciaPayload && presenciaPayload.tirador_id && !nuevo.has(presenciaPayload.tirador_id) && String(torneoAdmin && torneoAdmin.id) === presenciaPayload.torneo_id) { clearTimeout(presenciaReintento); presenciaReintento = setTimeout(() => { presenciaUltima = ''; publicarPresenciaJuez(); }, 1200); }
 }
 let presenciaReintento = null;
+// Comprueba que el aviso realmente quedó registrado; si no, lo reenvía (hasta 4 veces)
+function verificarPresencia(p, n) {
+    setTimeout(() => {
+        if (!esAdmin || presenciaPayload !== p) return;
+        let ok = false; try { ok = Object.values(canalRealtime.presenceState()).some(ms => (ms || []).some(m => m && String(m.tirador_id) === p.tirador_id && String(m.torneo_id) === p.torneo_id)); } catch (e) {}
+        if (ok || n >= 4) return;
+        canalRealtime.track({ ...p, t: Date.now() }).catch(() => {}); verificarPresencia(p, n + 1);
+    }, 1500);
+}
 let presenciaTimer = null; let presenciaEnvio = Promise.resolve(); let presenciaPayload = null;
 function publicarPresenciaJuez() {
     if (!esAdmin || !canalListo) return;
@@ -58,7 +67,10 @@ function publicarPresenciaJuez() {
     presenciaTimer = setTimeout(() => {
         presenciaEnvio = presenciaEnvio.then(async () => {
             try {
-                const p = presenciaPayload; const r = await canalRealtime.track({ ...p, t: Date.now() });
+                const p = presenciaPayload;
+                if (!p.tirador_id) { await canalRealtime.untrack(); return; }   // salí de Jueces: se retira el aviso
+                const r = await canalRealtime.track({ ...p, t: Date.now() });
+                verificarPresencia(p, 0);
                 if (r && r !== 'ok') { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
             } catch (e) { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
         });
@@ -483,6 +495,7 @@ async function cargarResultados(idTorneo) {
     } else tiradoresLocales = [];
 
     tiradoresTirando = calcularTirando();
+    if (esAdmin && presenciaPayload && presenciaPayload.tirador_id && String(torneoAdmin && torneoAdmin.id) === presenciaPayload.torneo_id) tiradoresTirando.add(presenciaPayload.tirador_id); // mi propio tirador siempre se ve
     const objTorneo = esAdmin ? torneoAdmin : torneoTV;
     if (esAdmin) {
         renderizarFiltrosCategorias('filtros-cat-admin', objTorneo); renderizarAdminJueces(); renderizarAdminBaseDatosTorneo(); renderizarMaster(); renderizarStats(); renderizarVistaResultadosUnificada('cabecera-tabla-admin', objTorneo); renderizarPedana('contenedor-pedana-admin', objTorneo);
@@ -1017,7 +1030,7 @@ window.exportarExcel = function() {
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(datos), "Resultados"); XLSX.writeFile(wb, `Resultados_${torneoAdmin.nombre.replace(/ /g, '_')}.xlsx`);
 }
 
-function avisarALaTV(payload = {}) { canalRealtime.send({ type: 'broadcast', event: 'recargar_pantallas', payload }); }
+function avisarALaTV(payload = {}) { canalRealtime.send({ type: 'broadcast', event: 'recargar_pantallas', payload }); if (esAdmin) { presenciaUltima = ''; publicarPresenciaJuez(); } } // cada vez que se puntúa también se vuelve a avisar quién está tirando
 window.abrirModalEditar = function(id, nom, ord, cat) { document.getElementById('edit-id').value = id; document.getElementById('edit-tirador').value = nom; document.getElementById('edit-orden').value = ord; document.getElementById('edit-categoria').value = cat; document.getElementById('modal-editar').style.display = 'flex'; }
 window.cerrarModalEditar = () => document.getElementById('modal-editar').style.display = 'none';
 window.guardarEdicionTirador = async function() { let nuevoOrden = parseInt(document.getElementById('edit-orden').value); let idActual = document.getElementById('edit-id').value; if (tiradoresLocales.some(t => t.orden === nuevoOrden && t.id !== idActual)) return mostrarAlerta(`El Nº ${nuevoOrden} ya está asignado.`); await clienteSupabase.from('inscripciones').update({ tirador: document.getElementById('edit-tirador').value, orden: nuevoOrden, categoria: document.getElementById('edit-categoria').value }).eq('id', idActual); cerrarModalEditar(); await cargarResultados(torneoAdmin.id); avisarALaTV(); }
