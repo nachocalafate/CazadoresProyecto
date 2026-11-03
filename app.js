@@ -41,14 +41,28 @@ function redibujarResultados() {
 function onPresenciaSync() {
     const nuevo = calcularTirando(); const igual = nuevo.size === tiradoresTirando.size && [...nuevo].every(x => tiradoresTirando.has(x));
     tiradoresTirando = nuevo; if (!igual) redibujarResultados();
+    // Si mi propio aviso se perdió, lo reenvío
+    if (esAdmin && canalListo && presenciaPayload && presenciaPayload.tirador_id && !nuevo.has(presenciaPayload.tirador_id) && String(torneoAdmin && torneoAdmin.id) === presenciaPayload.torneo_id) { clearTimeout(presenciaReintento); presenciaReintento = setTimeout(() => { presenciaUltima = ''; publicarPresenciaJuez(); }, 1200); }
 }
+let presenciaReintento = null;
+let presenciaTimer = null; let presenciaEnvio = Promise.resolve(); let presenciaPayload = null;
 function publicarPresenciaJuez() {
     if (!esAdmin || !canalListo) return;
     const enJueces = tabAdminActiva === 'tab-jueces';
     const idT = (enJueces && torneoAdmin && tiradorJuezActivoId && tiradorJuezActivoId !== JUEZ_EMPEZAR) ? String(tiradorJuezActivoId) : null;
     const payload = { torneo_id: torneoAdmin ? String(torneoAdmin.id) : null, tirador_id: idT, rol: rolActual };
     const clave = JSON.stringify(payload); if (clave === presenciaUltima) return; presenciaUltima = clave;
-    try { canalRealtime.track({ ...payload, t: Date.now() }); } catch (e) {}
+    presenciaPayload = payload;
+    // Si el juez se mueve rápido, se manda solo el último tirador (evita saturar el canal y perder el aviso)
+    clearTimeout(presenciaTimer);
+    presenciaTimer = setTimeout(() => {
+        presenciaEnvio = presenciaEnvio.then(async () => {
+            try {
+                const p = presenciaPayload; const r = await canalRealtime.track({ ...p, t: Date.now() });
+                if (r && r !== 'ok') { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
+            } catch (e) { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
+        });
+    }, 250);
 }
 window.addEventListener('beforeunload', () => { try { if (esAdmin) canalRealtime.untrack(); } catch (e) {} });
 // Reenvío periódico: si la conexión se cayó y volvió, la presencia se recupera sola
