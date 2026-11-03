@@ -27,11 +27,16 @@ let tabAdminActiva = 'tab-resultados';
 let tiradoresTirando = new Set();     // ids de inscripción que algún juez/admin está puntuando ahora
 let canalListo = false; let presenciaUltima = '';
 
-// Quién está puntuando a quién: cada juez/admin publica su tirador abierto y todas las pantallas lo escuchan
+// Quién está puntuando a quién. Cada juez/admin manda por el canal "tirando" su tirador abierto
+// (al cambiar y cada 3 segundos como latido); todas las pantallas guardan lo último que oyeron de cada uno
+// y lo dan por vencido a los 9 segundos sin noticias. No depende de la "presencia" de Supabase.
+const MI_CID = 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+let tirandoMapa = {};                 // cid -> { torneo, tid, ts }
+let presenciaPayload = null;
 function calcularTirando() {
     const obj = esAdmin ? torneoAdmin : torneoTV; const set = new Set(); if (!obj) return set;
-    let estado = {}; try { estado = canalRealtime.presenceState(); } catch (e) {}
-    Object.values(estado).forEach(metas => (metas || []).forEach(m => { if (m && m.tirador_id && String(m.torneo_id) === String(obj.id)) set.add(String(m.tirador_id)); }));
+    const ahora = Date.now();
+    Object.entries(tirandoMapa).forEach(([cid, m]) => { if (m && m.tid && ahora - m.ts < 9000 && String(m.torneo) === String(obj.id)) set.add(String(m.tid)); });
     return set;
 }
 function redibujarResultados() {
@@ -41,45 +46,27 @@ function redibujarResultados() {
 function onPresenciaSync() {
     const nuevo = calcularTirando(); const igual = nuevo.size === tiradoresTirando.size && [...nuevo].every(x => tiradoresTirando.has(x));
     tiradoresTirando = nuevo; if (!igual) redibujarResultados();
-    // Si mi propio aviso se perdió, lo reenvío
-    if (esAdmin && canalListo && presenciaPayload && presenciaPayload.tirador_id && !nuevo.has(presenciaPayload.tirador_id) && String(torneoAdmin && torneoAdmin.id) === presenciaPayload.torneo_id) { clearTimeout(presenciaReintento); presenciaReintento = setTimeout(() => { presenciaUltima = ''; publicarPresenciaJuez(); }, 1200); }
 }
-let presenciaReintento = null;
-// Comprueba que el aviso realmente quedó registrado; si no, lo reenvía (hasta 4 veces)
-function verificarPresencia(p, n) {
-    setTimeout(() => {
-        if (!esAdmin || presenciaPayload !== p) return;
-        let ok = false; try { ok = Object.values(canalRealtime.presenceState()).some(ms => (ms || []).some(m => m && String(m.tirador_id) === p.tirador_id && String(m.torneo_id) === p.torneo_id)); } catch (e) {}
-        if (ok || n >= 4) return;
-        canalRealtime.track({ ...p, t: Date.now() }).catch(() => {}); verificarPresencia(p, n + 1);
-    }, 1500);
+function enviarTirando() {
+    if (!esAdmin || !canalListo || !presenciaPayload) return;
+    try { canalRealtime.send({ type: 'broadcast', event: 'tirando', payload: { cid: MI_CID, torneo: presenciaPayload.torneo_id, tid: presenciaPayload.tirador_id } }); } catch (e) {}
 }
-let presenciaTimer = null; let presenciaEnvio = Promise.resolve(); let presenciaPayload = null;
 function publicarPresenciaJuez() {
-    if (!esAdmin || !canalListo) return;
+    if (!esAdmin) return;
     const enJueces = tabAdminActiva === 'tab-jueces';
     const idT = (enJueces && torneoAdmin && tiradorJuezActivoId && tiradorJuezActivoId !== JUEZ_EMPEZAR) ? String(tiradorJuezActivoId) : null;
-    const payload = { torneo_id: torneoAdmin ? String(torneoAdmin.id) : null, tirador_id: idT, rol: rolActual };
-    const clave = JSON.stringify(payload); if (clave === presenciaUltima) return; presenciaUltima = clave;
-    presenciaPayload = payload;
-    // Si el juez se mueve rápido, se manda solo el último tirador (evita saturar el canal y perder el aviso)
-    clearTimeout(presenciaTimer);
-    presenciaTimer = setTimeout(() => {
-        presenciaEnvio = presenciaEnvio.then(async () => {
-            try {
-                const p = presenciaPayload;
-                if (!p.tirador_id) { await canalRealtime.untrack(); return; }   // salí de Jueces: se retira el aviso
-                const r = await canalRealtime.track({ ...p, t: Date.now() });
-                verificarPresencia(p, 0);
-                if (r && r !== 'ok') { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
-            } catch (e) { presenciaUltima = ''; setTimeout(publicarPresenciaJuez, 1500); }
-        });
-    }, 250);
+    presenciaPayload = { torneo_id: torneoAdmin ? String(torneoAdmin.id) : null, tirador_id: idT, rol: rolActual };
+    tirandoMapa[MI_CID] = { torneo: presenciaPayload.torneo_id, tid: idT, ts: Date.now() };   // mi propia pantalla se entera al instante
+    onPresenciaSync(); enviarTirando();
 }
-window.addEventListener('beforeunload', () => { try { if (esAdmin) canalRealtime.untrack(); } catch (e) {} });
-// Reenvío periódico: si la conexión se cayó y volvió, la presencia se recupera sola
-setInterval(() => { if (esAdmin && canalListo) { presenciaUltima = ''; publicarPresenciaJuez(); } }, 10000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && esAdmin && canalListo) { presenciaUltima = ''; publicarPresenciaJuez(); } });
+canalRealtime.on('broadcast', { event: 'tirando' }, ({ payload }) => {
+    if (!payload || !payload.cid || payload.cid === MI_CID) return;
+    tirandoMapa[payload.cid] = { torneo: payload.torneo, tid: payload.tid, ts: Date.now() }; onPresenciaSync();
+});
+window.addEventListener('beforeunload', () => { if (esAdmin && presenciaPayload) { presenciaPayload.tirador_id = null; enviarTirando(); } });
+// Latido: renueva mi aviso y descarta los vencidos
+setInterval(() => { if (esAdmin && canalListo) { tirandoMapa[MI_CID] = { torneo: presenciaPayload ? presenciaPayload.torneo_id : null, tid: presenciaPayload ? presenciaPayload.tirador_id : null, ts: Date.now() }; enviarTirando(); } onPresenciaSync(); }, 3000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && esAdmin) publicarPresenciaJuez(); });
 
 // Los jueces/admin reciben los cambios de los demás (resultados, llamado a pedana) sin recargar
 let refrescoAdminTimer = null;
@@ -1084,5 +1071,5 @@ window.eliminarTorneoActual = function() { mostrarConfirmacion("¿ELIMINAR torne
 canalRealtime.on('broadcast', { event: 'recargar_pantallas' }, async () => {
     if (esAdmin) { programarRefrescoAdmin(); return; }
     if (torneoTV) { const { data } = await clienteSupabase.from('torneos').select('*').eq('id', torneoTV.id).single(); if (data) torneoTV = data; cargarResultados(torneoTV.id); } else inicializarDatos();
-}).on('presence', { event: 'sync' }, onPresenciaSync).subscribe((status) => { if (status === 'SUBSCRIBED') { canalListo = true; presenciaUltima = ''; publicarPresenciaJuez(); onPresenciaSync(); } });
+}).subscribe((status) => { if (status === 'SUBSCRIBED') { canalListo = true; presenciaUltima = ''; publicarPresenciaJuez(); onPresenciaSync(); } });
 document.addEventListener('DOMContentLoaded', verificarSesion);
