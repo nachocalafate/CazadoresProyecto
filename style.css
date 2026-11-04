@@ -209,10 +209,10 @@ body.modo-tv-activo .split-right .pedana-next-nombre { font-size: 1.5rem; margin
 .pedana-stats .numero-grande { font-size: 4rem; font-weight: 900; color: white; vertical-align: middle; }
 .pedana-stats .texto-chico { font-size: 1.1rem; font-weight: bold; color: rgba(255,255,255,0.8); vertical-align: middle; margin-left: 10px; }
 .pedana-lbl-prox { background-color: var(--accent-yellow); color: black; font-weight: 900; font-size: 1rem; padding: 6px 15px; border-radius: 4px; display: inline-block; margin-bottom: -15px; position: relative; z-index: 10; letter-spacing: 0.5px; }
-.pedana-next-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
-.pedana-next-box { background-color: #050505; border: 1px solid #1F1F1F; border-radius: 6px; padding: 25px 10px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+.pedana-next-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; width: 100%; box-sizing: border-box; }
+.pedana-next-box { min-width: 0; box-sizing: border-box; overflow: hidden; background-color: #050505; border: 1px solid #1F1F1F; border-radius: 6px; padding: 25px 10px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
 .pedana-next-orden { font-size: 4.5rem; font-weight: 900; color: white; line-height: 1; margin-bottom: 8px; }
-.pedana-next-nombre { font-size: 1.3rem; font-weight: 900; color: var(--accent-yellow); text-transform: uppercase; margin-bottom: 12px; }
+.pedana-next-nombre { overflow-wrap: anywhere; word-break: break-word; line-height: 1.15; font-size: 1.3rem; font-weight: 900; color: var(--accent-yellow); text-transform: uppercase; margin-bottom: 12px; }
 .pedana-plate { width: 28px; height: 28px; font-size: 0.9rem; border-radius: 2px; }
 
 body.modo-tv-activo .pedana-container { max-width: 1300px; margin: 30px auto; }
@@ -451,3 +451,9 @@ body.modo-tv-activo .pedana-final .pedana-final-titulo { font-size: 6rem; margin
 body.modo-tv-activo .pedana-final .pedana-final-sub { font-size: 1.8rem; }
 body.modo-tv-activo .split-right .pedana-final .pedana-final-titulo { font-size: 2.6rem; margin: 20px 0 10px; }
 body.modo-tv-activo .split-right .pedana-final .pedana-final-sub { font-size: .95rem; letter-spacing: 2px; }
+
+/* Pedana: el bloque verde y los 3 próximos tiradores ocupan siempre el mismo ancho (también en modo dividido) */
+.pedana-container, .pedana-main { box-sizing: border-box; max-width: 100%; }
+.pedana-container > div, .pedana-container .pedana-next-grid { box-sizing: border-box; }
+body.modo-tv-activo .split-right .pedana-container { margin: 0 auto; width: 100%; }
+@media (max-width: 520px) { .pedana-next-grid { gap: 8px; } .pedana-next-nombre { font-size: 1.05rem; } .pedana-next-orden { font-size: 3rem; } }
